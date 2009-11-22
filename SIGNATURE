@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.55.
+signed via the Module::Signature module, version 0.61.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -15,15 +15,15 @@ not run its Makefile.PL or Build.PL.
 Hash: SHA1
 
 SHA1 1053efb6ec631b6c9fa210af0a032cb89b181bcc .cvsignore
-SHA1 0bcbd115f276fedd85e37e362520294d07d1004f Build.PL
-SHA1 c8fb4f2f32eed00d0d907319c502ddfc12fad988 Changes
+SHA1 cd5930dc78764fd06605d91b77824c4e510ab6bd Build.PL
+SHA1 6365e39d9a48d0825ea5742c71bece6ccc8d755b Changes
 SHA1 410515e66fbe9f0d16a0c5bea5fec652b937ff14 MANIFEST
-SHA1 b5239cb257c4935274183e2a3be3923eeabca52c META.yml
-SHA1 cf6d806274a3011380d72a2906dea162d16bda99 Makefile.PL
+SHA1 eb0eac2ac637ffa3dad57746ebbf511fc8c655f3 META.yml
+SHA1 7270b56e8e36978847195b6934cb6556ced2f134 Makefile.PL
 SHA1 8f7cad7a60c4cc058e8f6d1c0a1440e3f41c65ea README
 SHA1 c7ef004e6e731687dc9375b4277f74eaa4e4b550 lib/Parse/.cvsignore
-SHA1 b23343307b52ebb33eb64ad223e43ec495e3b9d4 lib/Parse/Perl.pm
-SHA1 abe2161334ef3e1f05af9c6bbfd3053ed39a92ea lib/Parse/Perl.xs
+SHA1 e9b837b6bdfa426f69ce58e61d54713f3bb22123 lib/Parse/Perl.pm
+SHA1 86974d9817b1152eb2950b43b44bce2648afb574 lib/Parse/Perl.xs
 SHA1 7a99f54831e4699d59db8bae24cd6b57f5706891 lib/Parse/Perl/CopHintsHash.pod
 SHA1 0926c3fffda67b70dd44841848301d754417520f lib/Parse/Perl/Environment.pod
 SHA1 709ddd6d4b09a7ee462d99c33a1685e5a52dadfb t/args.t
@@ -47,7 +47,7 @@ SHA1 079d1c5792a213e22ae3d340e07a8929769f4154 t/return.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.4.9 (GNU/Linux)
 
-iEYEARECAAYFAkrduWMACgkQOV9mt2VyAVHgdwCfY7gmOxX1FmR7PPKvBTvFnC+2
-69AAnj4yj4BV99CKMfcOnRG9t98ctEDw
-=4eTD
+iEYEARECAAYFAksJNqIACgkQOV9mt2VyAVG99ACghwuEMpPY+FuvwMbABIRO/vrR
+MeUAniemDLOGwqkW6v80P3bIqL2LYtfs
+=twhU
 -----END PGP SIGNATURE-----

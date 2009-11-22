@@ -41,7 +41,7 @@ package Parse::Perl;
 use warnings;
 use strict;
 
-our $VERSION = "0.000";
+our $VERSION = "0.001";
 
 use parent "Exporter";
 our @EXPORT_OK = qw(current_environment parse_perl);
@@ -51,12 +51,12 @@ XSLoader::load(__PACKAGE__, $VERSION);
 
 {
 	package Parse::Perl::CopHintsHash;
-	our $VERSION = "0.000";
+	our $VERSION = "0.001";
 }
 
 {
 	package Parse::Perl::Environment;
-	our $VERSION = "0.000";
+	our $VERSION = "0.001";
 }
 
 =head1 OPERATORS

@@ -6,8 +6,11 @@ use Module::Build;
 
 Module::Build->new(
 	module_name => "Parse::Perl",
-	dist_version => "0.000",
 	license => "perl",
+	configure_requires => {
+		"Module::Build" => 0,
+		"perl" => "5.008004",
+	},
 	build_requires => {
 		"ExtUtils::CBuilder" => "0.15",
 		"Module::Build" => 0,

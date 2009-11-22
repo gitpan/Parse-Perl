@@ -1,3 +1,9 @@
+version 0.001; 2009-11-22
+
+  * port to Perl 5.11.2: different usage for pad_findmy()
+
+  * in Build.PL, explicitly declare configure-time requirements
+
 version 0.000; 2009-10-20
 
   * initial released version

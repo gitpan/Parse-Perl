@@ -50,6 +50,12 @@
 # endif /* >=5.9.0 */
 #endif /* !PARENT_PAD_INDEX */
 
+#if PERL_VERSION_GE(5,11,2)
+# define pad_findmy_sv(sv) pad_findmy(SvPVX(sv), SvCUR(sv), 0)
+#else /* <5.11.2 */
+# define pad_findmy_sv(sv) pad_findmy(SvPVX(sv))
+#endif /* <5.11.2 */
+
 #ifndef newSV_type
 static SV *Perl_newSV_type(pTHX_ svtype type)
 {
@@ -471,7 +477,7 @@ static OP *gen_current_environment_op(pTHX)
 		for(ix = fname+1; ix--; ) {
 			SV *namesv = pname[ix];
 			if(namesv && SvPOKp(namesv) && SvCUR(namesv) > 1)
-				(void)pad_findmy(SvPVX(namesv));
+				(void)pad_findmy_sv(namesv);
 		}
 	}
 	/*
@@ -587,7 +593,7 @@ static void populate_pad_from_sub(pTHX_ CV *func)
 				SvPOKp(namesv) && SvCUR(namesv) > 1 &&
 				SvFAKE(namesv) &&
 				var_from_outside_compcv(aTHX_ func, namesv)) {
-			(void)pad_findmy(SvPVX(namesv));
+			(void)pad_findmy_sv(namesv);
 		}
 	}
 }
