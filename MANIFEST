@@ -20,6 +20,7 @@ t/lex_package.t
 t/lex_strict.t
 t/lex_variable.t
 t/lex_warnings.t
+t/leximport.t
 t/magicblock.t
 t/name.t
 t/nest_capture.t

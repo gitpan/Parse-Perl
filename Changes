@@ -1,3 +1,21 @@
+version 0.002; 2010-07-20
+
+  * make current_environment operator compile correctly when imported
+    lexically via Lexical::Import
+
+  * port to Perl 5.13.3: use CvGV_set()
+
+  * correct order of parse_perl() parameters in synopsis
+
+  * small doc rewording
+
+  * in XS, use PERL_NO_GET_CONTEXT for efficiency
+
+  * in XS, use macros to avoid explicit passing of aTHX, in the manner
+    of the core
+
+  * add MYMETA.yml to .cvsignore
+
 version 0.001; 2009-11-22
 
   * port to Perl 5.11.2: different usage for pad_findmy()

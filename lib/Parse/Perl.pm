@@ -10,7 +10,7 @@ Parse::Perl - interpret string as Perl source
 
 	use Parse::Perl qw(parse_perl);
 
-	$func = parse_perl('$foo + 3', $env);
+	$func = parse_perl($env, '$foo + 3');
 
 =head1 DESCRIPTION
 
@@ -41,7 +41,7 @@ package Parse::Perl;
 use warnings;
 use strict;
 
-our $VERSION = "0.001";
+our $VERSION = "0.002";
 
 use parent "Exporter";
 our @EXPORT_OK = qw(current_environment parse_perl);
@@ -51,12 +51,12 @@ XSLoader::load(__PACKAGE__, $VERSION);
 
 {
 	package Parse::Perl::CopHintsHash;
-	our $VERSION = "0.001";
+	our $VERSION = "0.002";
 }
 
 {
 	package Parse::Perl::Environment;
-	our $VERSION = "0.001";
+	our $VERSION = "0.002";
 }
 
 =head1 OPERATORS
@@ -99,7 +99,7 @@ as if it were the body of a function), in the lexical environment
 represented by I<ENVIRONMENT>.  If there is any error in compilation,
 a suitable exception is thrown.  If there is no error, the compiled code
 is returned, in the form of a reference to a Perl function.  The code
-represented by I<SOURCE> can thus be executed by calling the function.
+represented by I<SOURCE> can then be executed by calling the function.
 
 =back
 
@@ -114,7 +114,7 @@ Andrew Main (Zefram) <zefram@fysh.org>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2009 Andrew Main (Zefram) <zefram@fysh.org>
+Copyright (C) 2009, 2010 Andrew Main (Zefram) <zefram@fysh.org>
 
 =head1 LICENSE
 

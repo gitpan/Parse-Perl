@@ -1,3 +1,4 @@
+#define PERL_NO_GET_CONTEXT 1
 #define PERL_CORE 1   /* required for HINTS_REFCNT_LOCK et al */
 #include "EXTERN.h"
 #include "perl.h"
@@ -57,13 +58,13 @@
 #endif /* <5.11.2 */
 
 #ifndef newSV_type
-static SV *Perl_newSV_type(pTHX_ svtype type)
+# define newSV_type(type) THX_newSV_type(aTHX_ type)
+static SV *THX_newSV_type(pTHX_ svtype type)
 {
 	SV *sv = newSV(0);
 	SvUPGRADE(sv, type);
 	return sv;
 }
-# define newSV_type(type) Perl_newSV_type(aTHX_ (type))
 #endif /* !newSV_type */
 
 #ifndef gv_fetchpvs
@@ -114,6 +115,10 @@ static SV *Perl_newSV_type(pTHX_ svtype type)
 #ifndef HvEITER_set
 # define HvEITER_set(hv, val) (HvEITER(hv) = val)
 #endif /* !HvEITER_set */
+
+#ifndef CvGV_set
+# define CvGV_set(cv, val) (CvGV(cv) = val)
+#endif /*!CvGV_set */
 
 #if PERL_VERSION_GE(5,9,5)
 # define PL_error_count (PL_parser->error_count)
@@ -171,22 +176,38 @@ static OP *(*nxck_entersub)(pTHX_ OP *op);
 static CV *curenv_cv;
 
 #if QHAVE_COP_HINTS_HASH
-static struct refcounted_he *refcounted_he_inc(pTHX_ struct refcounted_he *rhe)
+
+# define refcounted_he_inc(rhe) THX_refcounted_he_inc(aTHX_ rhe)
+static struct refcounted_he *THX_refcounted_he_inc(pTHX_
+	struct refcounted_he *rhe)
 {
 	HINTS_REFCNT_LOCK;
 	rhe->refcounted_he_refcnt++;
 	HINTS_REFCNT_UNLOCK;
 	return rhe;
 }
+
+# ifndef refcounted_he_free
+#  define refcounted_he_free(rhe) Perl_refcounted_he_free(aTHX_ rhe)
+# endif /* !refcounted_he_free */
+
+# ifdef PERL_MAGIC_hints
+#  ifndef hv_copy_hints_hv
+#   define hv_copy_hints_hv(hv) Perl_hv_copy_hints_hv(aTHX_ hv)
+#  endif /* !hv_copy_hints_hv */
+# endif /* PERL_MAGIC_hints */
+
 #endif /* QHAVE_COP_HINTS_HASH */
 
-static SV *safe_av_fetch(pTHX_ AV *av, I32 index)
+#define safe_av_fetch(av, index) THX_safe_av_fetch(aTHX_ av, index)
+static SV *THX_safe_av_fetch(pTHX_ AV *av, I32 index)
 {
 	SV **ptr = av_fetch(av, index, 0);
 	return ptr ? *ptr : &PL_sv_undef;
 }
 
-static SV *package_to_sv(pTHX_ HV *pkg)
+#define package_to_sv(pkg) THX_package_to_sv(aTHX_ pkg)
+static SV *THX_package_to_sv(pTHX_ HV *pkg)
 {
 	SV *sv;
 	if(!pkg) return SvREFCNT_inc(undef_sv);
@@ -195,42 +216,48 @@ static SV *package_to_sv(pTHX_ HV *pkg)
 	return sv;
 }
 
-static HV *package_from_sv(pTHX_ SV *sv)
+#define package_from_sv(sv) THX_package_from_sv(aTHX_ sv)
+static HV *THX_package_from_sv(pTHX_ SV *sv)
 {
 	if(sv_is_undef(sv)) return NULL;
 	if(!sv_is_string(sv)) Perl_croak(aTHX_ "malformed package name");
 	return gv_stashsv(sv, GV_ADD);
 }
 
-static SV *iv_to_sv(pTHX_ IV iv)
+#define iv_to_sv(iv) THX_iv_to_sv(aTHX_ iv)
+static SV *THX_iv_to_sv(pTHX_ IV iv)
 {
 	SV *sv = newSViv(iv);
 	SvREADONLY_on(sv);
 	return sv;
 }
 
-static IV iv_from_sv(pTHX_ SV *sv)
+#define iv_from_sv(sv) THX_iv_from_sv(aTHX_ sv)
+static IV THX_iv_from_sv(pTHX_ SV *sv)
 {
 	if(!(sv_is_string(sv) && SvIOK(sv)))
 		Perl_croak(aTHX_ "malformed integer");
 	return SvIV(sv);
 }
 
-static SV *uv_to_sv(pTHX_ UV uv)
+#define uv_to_sv(uv) THX_uv_to_sv(aTHX_ uv)
+static SV *THX_uv_to_sv(pTHX_ UV uv)
 {
 	SV *sv = newSVuv(uv);
 	SvREADONLY_on(sv);
 	return sv;
 }
 
-static UV uv_from_sv(pTHX_ SV *sv)
+#define uv_from_sv(sv) THX_uv_from_sv(aTHX_ sv)
+static UV THX_uv_from_sv(pTHX_ SV *sv)
 {
 	if(!(sv_is_string(sv) && SvIOK(sv)))
 		Perl_croak(aTHX_ "malformed integer");
 	return SvUV(sv);
 }
 
-static SV *warnings_to_sv(pTHX_ WARNINGS_t *warnings)
+#define warnings_to_sv(warnings) THX_warnings_to_sv(aTHX_ warnings)
+static SV *THX_warnings_to_sv(pTHX_ WARNINGS_t *warnings)
 {
 	if(warnings == pWARN_ALL) {
 		return SvREFCNT_inc(warnsv_all);
@@ -249,7 +276,8 @@ static SV *warnings_to_sv(pTHX_ WARNINGS_t *warnings)
 	}
 }
 
-static WARNINGS_t *warnings_from_sv(pTHX_ SV *sv)
+#define warnings_from_sv(sv) THX_warnings_from_sv(aTHX_ sv)
+static WARNINGS_t *THX_warnings_from_sv(pTHX_ SV *sv)
 {
 	if(sv == warnsv_all) {
 		return pWARN_ALL;
@@ -277,7 +305,8 @@ static WARNINGS_t *warnings_from_sv(pTHX_ SV *sv)
 
 #if QHAVE_COP_IO
 
-static SV *iohint_to_sv(pTHX_ SV *iohint)
+#define iohint_to_sv(iohint) THX_iohint_to_sv(aTHX_ iohint)
+static SV *THX_iohint_to_sv(pTHX_ SV *iohint)
 {
 	SV *sv;
 	if(!iohint) return SvREFCNT_inc(undef_sv);
@@ -286,7 +315,8 @@ static SV *iohint_to_sv(pTHX_ SV *iohint)
 	return sv;
 }
 
-static SV *iohint_from_sv(pTHX_ SV *sv)
+#define iohint_from_sv(sv) THX_iohint_from_sv(aTHX_ sv)
+static SV *THX_iohint_from_sv(pTHX_ SV *sv)
 {
 	if(sv_is_undef(sv)) return NULL;
 	return newSVsv(sv);
@@ -296,11 +326,12 @@ static SV *iohint_from_sv(pTHX_ SV *sv)
 
 #if QHAVE_COP_HINTS_HASH
 
-static SV *cophh_to_sv(pTHX_ struct refcounted_he *cophh)
+#define cophh_to_sv(cophh) THX_cophh_to_sv(aTHX_ cophh)
+static SV *THX_cophh_to_sv(pTHX_ struct refcounted_he *cophh)
 {
 	SV *usv, *rsv;
 	if(!cophh) return SvREFCNT_inc(undef_sv);
-	refcounted_he_inc(aTHX_ cophh);
+	refcounted_he_inc(cophh);
 	usv = newSVuv((UV)cophh);
 	rsv = newRV_noinc(usv);
 	sv_bless(rsv, stash_cophh);
@@ -309,7 +340,8 @@ static SV *cophh_to_sv(pTHX_ struct refcounted_he *cophh)
 	return rsv;
 }
 
-static struct refcounted_he *cophh_from_sv(pTHX_ SV *sv)
+#define cophh_from_sv(sv) THX_cophh_from_sv(aTHX_ sv)
+static struct refcounted_he *THX_cophh_from_sv(pTHX_ SV *sv)
 {
 	SV *usv;
 	struct refcounted_he *cophh;
@@ -319,13 +351,14 @@ static struct refcounted_he *cophh_from_sv(pTHX_ SV *sv)
 			SvIOK(usv)))
 		Perl_croak(aTHX_ "malformed cop_hints_hash");
 	cophh = (struct refcounted_he *)SvUV(usv);
-	refcounted_he_inc(aTHX_ cophh);
+	refcounted_he_inc(cophh);
 	return cophh;
 }
 
 #endif /* QHAVE_COP_HINTS_HASH */
 
-static HV *copy_hv(pTHX_ HV *hin, int readonly)
+#define copy_hv(hin, readonly) THX_copy_hv(aTHX_ hin, readonly)
+static HV *THX_copy_hv(pTHX_ HV *hin, int readonly)
 {
 	HV *hout = newHV();
 	STRLEN hv_fill = HvFILL(hin);
@@ -351,16 +384,18 @@ static HV *copy_hv(pTHX_ HV *hin, int readonly)
 	return hout;
 }
 
-static SV *hinthash_to_sv(pTHX_ HV *hinthash)
+#define hinthash_to_sv(hinthash) THX_hinthash_to_sv(aTHX_ hinthash)
+static SV *THX_hinthash_to_sv(pTHX_ HV *hinthash)
 {
 	SV *sv;
 	if(!hinthash) return SvREFCNT_inc(undef_sv);
-	sv = newRV_noinc((SV*)copy_hv(aTHX_ hinthash, 1));
+	sv = newRV_noinc((SV*)copy_hv(hinthash, 1));
 	SvREADONLY_on(sv);
 	return sv;
 }
 
-static HV *hinthash_from_sv(pTHX_ SV *sv)
+#define hinthash_from_sv(sv) THX_hinthash_from_sv(aTHX_ sv)
+static HV *THX_hinthash_from_sv(pTHX_ SV *sv)
 {
 	HV *hh_copy;
 	if(sv_is_undef(sv)) return NULL;
@@ -368,20 +403,22 @@ static HV *hinthash_from_sv(pTHX_ SV *sv)
 			SvTYPE((SV*)hh_copy) == SVt_PVHV))
 		Perl_croak(aTHX_ "malformed hint hash");
 #ifdef PERL_MAGIC_hints
-	return Perl_hv_copy_hints_hv(aTHX_ hh_copy);
+	return hv_copy_hints_hv(hh_copy);
 #else /* !PERL_MAGIC_hints */
-	return copy_hv(aTHX_ hh_copy, 0);
+	return copy_hv(hh_copy, 0);
 #endif /* !PERL_MAGIC_hints */
 }
 
-static SV *function_to_sv(pTHX_ CV *func)
+#define function_to_sv(func) THX_function_to_sv(aTHX_ func)
+static SV *THX_function_to_sv(pTHX_ CV *func)
 {
 	SV *sv = newRV_inc((SV*)func);
 	SvREADONLY_on(sv);
 	return sv;
 }
 
-static CV *function_from_sv(pTHX_ SV *sv)
+#define function_from_sv(sv) THX_function_from_sv(aTHX_ sv)
+static CV *THX_function_from_sv(pTHX_ SV *sv)
 {
 	SV *func;
 	if(!(SvROK(sv) && (func = SvRV(sv), 1) && SvTYPE(func) == SVt_PVCV))
@@ -389,14 +426,16 @@ static CV *function_from_sv(pTHX_ SV *sv)
 	return (CV*)SvREFCNT_inc(func);
 }
 
-static SV *array_to_sv(pTHX_ AV *array)
+#define array_to_sv(array) THX_array_to_sv(aTHX_ array)
+static SV *THX_array_to_sv(pTHX_ AV *array)
 {
 	SV *sv = newRV_inc((SV*)array);
 	SvREADONLY_on(sv);
 	return sv;
 }
 
-static AV *array_from_sv(pTHX_ SV *sv)
+#define array_from_sv(sv) THX_array_from_sv(aTHX_ sv)
+static AV *THX_array_from_sv(pTHX_ SV *sv)
 {
 	SV *array;
 	if(!(SvROK(sv) && (array = SvRV(sv), 1) && SvTYPE(array) == SVt_PVAV))
@@ -407,9 +446,9 @@ static AV *array_from_sv(pTHX_ SV *sv)
 static OP *pp_current_pad(pTHX)
 {
 	CV *function = find_runcv(NULL);
-	SV *functionsv = sv_2mortal(function_to_sv(aTHX_ function));
+	SV *functionsv = sv_2mortal(function_to_sv(function));
 	U32 seq = PL_curcop->cop_seq;
-	SV *seqsv = sv_2mortal(uv_to_sv(aTHX_ seq));
+	SV *seqsv = sv_2mortal(uv_to_sv(seq));
 	AV *padlist = CvPADLIST(function);
 	AV *padname = (AV*)*av_fetch(padlist, 0, 0);
 	SV **pname = AvARRAY(padname);
@@ -446,14 +485,16 @@ static OP *pp_current_pad(pTHX)
 	return PL_op->op_next;
 }
 
-static OP *gen_current_pad_op(pTHX)
+#define gen_current_pad_op() THX_gen_current_pad_op(aTHX)
+static OP *THX_gen_current_pad_op(pTHX)
 {
 	OP *op = newSVOP(OP_CONST, 0, &PL_sv_undef);
 	op->op_ppaddr = pp_current_pad;
 	return op;
 }
 
-static OP *gen_current_environment_op(pTHX)
+#define gen_current_environment_op() THX_gen_current_environment_op(aTHX)
+static OP *THX_gen_current_environment_op(pTHX)
 {
 	CV *cv;
 	OP *op;
@@ -488,40 +529,45 @@ static OP *gen_current_environment_op(pTHX)
 	op = NULL;
 	op = append_elem(OP_LIST, op, /* ENV_PACKAGE */
 		newSVOP(OP_CONST, 0,
-			package_to_sv(aTHX_ PL_curstash)));
+			package_to_sv(PL_curstash)));
 	op = append_elem(OP_LIST, op, /* ENV_WARNINGS */
 		newSVOP(OP_CONST, 0,
-			warnings_to_sv(aTHX_ PL_compiling.cop_warnings)));
+			warnings_to_sv(PL_compiling.cop_warnings)));
 #if QHAVE_COP_ARYBASE
 	op = append_elem(OP_LIST, op, /* ENV_ARYBASE */
 		newSVOP(OP_CONST, 0,
-			iv_to_sv(aTHX_ PL_compiling.cop_arybase)));
+			iv_to_sv(PL_compiling.cop_arybase)));
 #endif /* QHAVE_COP_ARYBASE */
 #if QHAVE_COP_IO
 	op = append_elem(OP_LIST, op, /* ENV_IOHINT */
 		newSVOP(OP_CONST, 0,
-			iohint_to_sv(aTHX_ PL_compiling.cop_io)));
+			iohint_to_sv(PL_compiling.cop_io)));
 #endif /* QHAVE_COP_IO */
 	op = append_elem(OP_LIST, op, /* ENV_HINTBITS */
 		newSVOP(OP_CONST, 0,
-			uv_to_sv(aTHX_ PL_hints)));
+			uv_to_sv(PL_hints)));
 #if QHAVE_COP_HINTS_HASH
 	op = append_elem(OP_LIST, op, /* ENV_COPHINTHASH */
 		newSVOP(OP_CONST, 0,
-			cophh_to_sv(aTHX_ PL_compiling.cop_hints_hash)));
+			cophh_to_sv(PL_compiling.cop_hints_hash)));
 #endif /* QHAVE_COP_HINTS_HASH */
 	op = append_elem(OP_LIST, op, /* ENV_HINTHASH */
 		newSVOP(OP_CONST, 0,
-			hinthash_to_sv(aTHX_ GvHV(PL_hintgv))));
+			hinthash_to_sv(GvHV(PL_hintgv))));
 	op = append_elem(OP_LIST, op, /* ENV_OUTSIDE{CV,SEQ,PAD} */
-		gen_current_pad_op(aTHX));
+		gen_current_pad_op());
 	return newLISTOP(OP_BLESS, 0, newANONLIST(op),
 		newSVOP(OP_CONST, 0, SvREFCNT_inc(pkgname_env)));
 }
 
-static CV *rvop_cv(pTHX_ OP *rvop)
+#define rvop_cv(rvop) THX_rvop_cv(aTHX_ rvop)
+static CV *THX_rvop_cv(pTHX_ OP *rvop)
 {
 	switch(rvop->op_type) {
+		case OP_CONST: {
+			SV *rv = cSVOPx_sv(rvop);
+			return SvROK(rv) ? (CV*)SvRV(rv) : NULL;
+		} break;
 		case OP_GV: return GvCV(cGVOPx_gv(rvop));
 		default: return NULL;
 	}
@@ -535,10 +581,10 @@ static OP *ck_entersub(pTHX_ OP *op)
 	for(cvop = pushop; cvop->op_sibling; cvop = cvop->op_sibling) ;
 	if(cvop->op_type == OP_RV2CV &&
 			!(cvop->op_private & OPpENTERSUB_AMPER) &&
-			rvop_cv(aTHX_ cUNOPx(cvop)->op_first) == curenv_cv) {
+			rvop_cv(cUNOPx(cvop)->op_first) == curenv_cv) {
 		op = nxck_entersub(aTHX_ op);   /* for prototype checking */
 		op_free(op);
-		return gen_current_environment_op(aTHX);
+		return gen_current_environment_op();
 	} else {
 		return nxck_entersub(aTHX_ op);
 	}
@@ -546,14 +592,17 @@ static OP *ck_entersub(pTHX_ OP *op)
 
 #ifdef PARENT_PAD_INDEX
 
-static void populate_pad(pTHX)
+#define populate_pad() THX_populate_pad(aTHX)
+static void THX_populate_pad(pTHX)
 {
 	/* pad is fully populated during normal compilation */
 }
 
 #else /* !PARENT_PAD_INDEX */
 
-static int var_from_outside_compcv(pTHX_ CV *cv, SV *namesv)
+#define var_from_outside_compcv(cv, namesv) \
+	THX_var_from_outside_compcv(aTHX_ cv, namesv)
+static int THX_var_from_outside_compcv(pTHX_ CV *cv, SV *namesv)
 {
 	while(1) {
 		/*
@@ -582,7 +631,8 @@ static int var_from_outside_compcv(pTHX_ CV *cv, SV *namesv)
 	}
 }
 
-static void populate_pad_from_sub(pTHX_ CV *func)
+#define populate_pad_from_sub(func) THX_populate_pad_from_sub(aTHX_ func)
+static void THX_populate_pad_from_sub(pTHX_ CV *func)
 {
 	AV *padname = (AV*)*av_fetch(CvPADLIST(func), 0, 0);
 	I32 ix;
@@ -592,14 +642,15 @@ static void populate_pad_from_sub(pTHX_ CV *func)
 				(namesv = *namesv_p) &&
 				SvPOKp(namesv) && SvCUR(namesv) > 1 &&
 				SvFAKE(namesv) &&
-				var_from_outside_compcv(aTHX_ func, namesv)) {
+				var_from_outside_compcv(func, namesv)) {
 			(void)pad_findmy_sv(namesv);
 		}
 	}
 }
 
-static void populate_pad_recursively(pTHX_ CV *func);
-static void populate_pad_recursively(pTHX_ CV *func)
+#define populate_pad_recursively(func) THX_populate_pad_recursively(aTHX_ func)
+static void THX_populate_pad_recursively(pTHX_ CV *func);
+static void THX_populate_pad_recursively(pTHX_ CV *func)
 {
 	AV *padlist = CvPADLIST(func);
 	AV *padname = (AV*)*av_fetch(padlist, 0, 0);
@@ -614,20 +665,22 @@ static void populate_pad_recursively(pTHX_ CV *func)
 				*SvPVX(namesv) == '&' &&
 				(sub = (CV*)*av_fetch(pad, ix, 0)) &&
 				CvCLONE(sub)) {
-			populate_pad_from_sub(aTHX_ sub);
-			populate_pad_recursively(aTHX_ sub);
+			populate_pad_from_sub(sub);
+			populate_pad_recursively(sub);
 		}
 	}
 }
 
-static void populate_pad(pTHX)
+#define populate_pad() THX_populate_pad(aTHX)
+static void THX_populate_pad(pTHX)
 {
-	populate_pad_recursively(aTHX_ PL_compcv);
+	populate_pad_recursively(PL_compcv);
 }
 
 #endif /* !PARENT_PAD_INDEX */
 
-static void close_pad(pTHX_ CV *func, AV *outpad)
+#define close_pad(func, outpad) THX_close_pad(aTHX_ func, outpad)
+static void THX_close_pad(pTHX_ CV *func, AV *outpad)
 {
 #ifndef PARENT_PAD_INDEX
 	CV *out = CvOUTSIDE(func);
@@ -673,7 +726,7 @@ static void close_pad(pTHX_ CV *func, AV *outpad)
 		if(pix == 0) pix = fpix;
 #endif /* !PARENT_PAD_INDEX */
 		if(!(pix != 0 && ix <= fpad &&
-				(vref = safe_av_fetch(aTHX_ outpad, pix), 1) &&
+				(vref = safe_av_fetch(outpad, pix), 1) &&
 				SvROK(vref) && (vsv = SvRV(vref), 1) &&
 				!(SvPADSTALE(vsv) && !SvPAD_STATE(namesv))))
 			Perl_croak(aTHX_ "Variable \"%s\" is not available",
@@ -737,8 +790,7 @@ CODE:
 	SAVEI32(PL_subline);
 	PL_subline = 1;
 	SAVESPTR(PL_curstash);
-	PL_curstash = package_from_sv(aTHX_
-			safe_av_fetch(aTHX_ enva, ENV_PACKAGE));
+	PL_curstash = package_from_sv(safe_av_fetch(enva, ENV_PACKAGE));
 	save_item(PL_curstname);
 	sv_setpv(PL_curstname,
 			!PL_curstash ? "<none>" : HvNAME_get(PL_curstash));
@@ -750,8 +802,7 @@ CODE:
 	SAVECOMPILEWARNINGS();
 #endif /* !QHAVE_WARNINGS_AS_SV */
 	PL_compiling.cop_warnings =
-		warnings_from_sv(aTHX_
-			safe_av_fetch(aTHX_ enva, ENV_WARNINGS));
+		warnings_from_sv(safe_av_fetch(enva, ENV_WARNINGS));
 #if QHAVE_WARNINGS_AS_SV
 	if(!specialWARN(PL_compiling.cop_warnings))
 		SAVEFREESV(PL_compiling.cop_warnings);
@@ -759,32 +810,29 @@ CODE:
 #if QHAVE_COP_ARYBASE
 	SAVEI32(PL_compiling.cop_arybase);
 	PL_compiling.cop_arybase =
-		iv_from_sv(aTHX_ safe_av_fetch(aTHX_ enva, ENV_ARYBASE));
+		iv_from_sv(safe_av_fetch(enva, ENV_ARYBASE));
 #endif /* QHAVE_COP_ARYBASE */
 #if QHAVE_COP_IO
 	SAVESPTR(PL_compiling.cop_io);
-	PL_compiling.cop_io =
-		iohint_from_sv(aTHX_ safe_av_fetch(aTHX_ enva, ENV_IOHINT));
+	PL_compiling.cop_io = iohint_from_sv(safe_av_fetch(enva, ENV_IOHINT));
 	if(PL_compiling.cop_io) SAVEFREESV(PL_compiling.cop_io);
 #endif /* QHAVE_COP_IO */
 	PL_hints |= HINT_LOCALIZE_HH;
 	SAVEHINTS();
-	PL_hints = uv_from_sv(aTHX_ safe_av_fetch(aTHX_ enva, ENV_HINTBITS)) |
+	PL_hints = uv_from_sv(safe_av_fetch(enva, ENV_HINTBITS)) |
 		HINT_BLOCK_SCOPE;
 	{
 		HV *old_hh = GvHV(PL_hintgv);
 		GvHV(PL_hintgv) =
-			hinthash_from_sv(aTHX_
-				safe_av_fetch(aTHX_ enva, ENV_HINTHASH));
+			hinthash_from_sv(safe_av_fetch(enva, ENV_HINTHASH));
 		if(old_hh) SvREFCNT_dec(old_hh);
 	}
 #if QHAVE_COP_HINTS_HASH
 	{
 		struct refcounted_he *old_cophh = PL_compiling.cop_hints_hash;
 		PL_compiling.cop_hints_hash =
-			cophh_from_sv(aTHX_
-				safe_av_fetch(aTHX_ enva, ENV_COPHINTHASH));
-		if(old_cophh) Perl_refcounted_he_free(aTHX_ old_cophh);
+			cophh_from_sv(safe_av_fetch(enva, ENV_COPHINTHASH));
+		if(old_cophh) refcounted_he_free(old_cophh);
 	}
 #endif /* QHAVE_COP_HINTS_HASH */
 #if QHAVE_COP_HINTS
@@ -802,14 +850,13 @@ CODE:
 	PL_compcv = (CV*)newSV_type(SVt_PVCV);
 	CvANON_on(PL_compcv);
 	CvSTASH(PL_compcv) = PL_curstash;
-	CvGV(PL_compcv) = PL_curstash ?
+	CvGV_set(PL_compcv, PL_curstash ?
 		gv_fetchpvs("__ANON__", GV_ADDMULTI, SVt_PVCV) :
-		gv_fetchpvs("__ANON__::__ANON__", GV_ADDMULTI, SVt_PVCV);
+		gv_fetchpvs("__ANON__::__ANON__", GV_ADDMULTI, SVt_PVCV));
 	CvOUTSIDE(PL_compcv) =
-		function_from_sv(aTHX_
-			safe_av_fetch(aTHX_ enva, ENV_OUTSIDECV));
+		function_from_sv(safe_av_fetch(enva, ENV_OUTSIDECV));
 	CvOUTSIDE_SEQ(PL_compcv) =
-		uv_from_sv(aTHX_ safe_av_fetch(aTHX_ enva, ENV_OUTSIDESEQ));
+		uv_from_sv(safe_av_fetch(enva, ENV_OUTSIDESEQ));
 	CvPADLIST(PL_compcv) = pad_new(padnew_SAVE);
 	/* initialise other parser state */
 	SAVEOP();
@@ -854,10 +901,9 @@ CODE:
 	CvROOT(PL_compcv) = PL_eval_root;
 	CvSTART(PL_compcv) = PL_eval_start;
 	if(CvCLONE(PL_compcv)) {
-		populate_pad(aTHX);
-		close_pad(aTHX_ PL_compcv,
-			array_from_sv(aTHX_
-				safe_av_fetch(aTHX_ enva, ENV_OUTSIDEPAD)));
+		populate_pad();
+		close_pad(PL_compcv,
+			array_from_sv(safe_av_fetch(enva, ENV_OUTSIDEPAD)));
 		CvCLONE_off(PL_compcv);
 	}
 	pad_tidy(padtidy_SUB);
@@ -886,5 +932,5 @@ CODE:
 			SvIOK(usv)))
 		Perl_croak(aTHX_ "malformed cop_hints_hash");
 	cophh = (struct refcounted_he *)SvUV(usv);
-	Perl_refcounted_he_free(aTHX_ cophh);
+	refcounted_he_free(cophh);
 #endif /* QHAVE_COP_HINTS_HASH */

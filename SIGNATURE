@@ -1,5 +1,5 @@
 This file contains message digests of all files listed in MANIFEST,
-signed via the Module::Signature module, version 0.61.
+signed via the Module::Signature module, version 0.64.
 
 To verify the content in this distribution, first make sure you have
 Module::Signature installed, then type:
@@ -14,18 +14,18 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 1053efb6ec631b6c9fa210af0a032cb89b181bcc .cvsignore
+SHA1 3798e6cee61803be5ae04972dee3434cc1b3ff47 .cvsignore
 SHA1 cd5930dc78764fd06605d91b77824c4e510ab6bd Build.PL
-SHA1 6365e39d9a48d0825ea5742c71bece6ccc8d755b Changes
-SHA1 410515e66fbe9f0d16a0c5bea5fec652b937ff14 MANIFEST
-SHA1 eb0eac2ac637ffa3dad57746ebbf511fc8c655f3 META.yml
-SHA1 7270b56e8e36978847195b6934cb6556ced2f134 Makefile.PL
-SHA1 8f7cad7a60c4cc058e8f6d1c0a1440e3f41c65ea README
+SHA1 427a43b62a3015464f92c16aa3e011dbe3ec49eb Changes
+SHA1 4c0dff4a9037ab28dbfd48089ea000bf145e1aea MANIFEST
+SHA1 45f2600270606af8701e61f0db9f50f6b6f2d1a6 META.yml
+SHA1 add3a6b91a296d7071eb874a055e0656bf382c23 Makefile.PL
+SHA1 bfdc20a990520dd629200659c05dcf394d4e80b3 README
 SHA1 c7ef004e6e731687dc9375b4277f74eaa4e4b550 lib/Parse/.cvsignore
-SHA1 e9b837b6bdfa426f69ce58e61d54713f3bb22123 lib/Parse/Perl.pm
-SHA1 86974d9817b1152eb2950b43b44bce2648afb574 lib/Parse/Perl.xs
-SHA1 7a99f54831e4699d59db8bae24cd6b57f5706891 lib/Parse/Perl/CopHintsHash.pod
-SHA1 0926c3fffda67b70dd44841848301d754417520f lib/Parse/Perl/Environment.pod
+SHA1 bec11eb97fba1b68449f9279605bcb6a6a33674a lib/Parse/Perl.pm
+SHA1 09f4948f496c0a7e4255211671560fc1e2ae824a lib/Parse/Perl.xs
+SHA1 00c76da7db10b9f26e924d56e3d22026d287568a lib/Parse/Perl/CopHintsHash.pod
+SHA1 6505eff49ee02bc9243e0fe5c22cb91dd47ce0f3 lib/Parse/Perl/Environment.pod
 SHA1 709ddd6d4b09a7ee462d99c33a1685e5a52dadfb t/args.t
 SHA1 6b3de2aa072d4488f2b3b34ba95afbc1d1e133af t/curcop.t
 SHA1 b38a0e0c7775325ce6c068c7ca084b0413e1c90c t/error.t
@@ -36,6 +36,7 @@ SHA1 d1513219131faca5eddc20baf26c0ca84f95a36f t/lex_package.t
 SHA1 ae20b46e8a70cfbae817dbcd8f4746e71cf4d124 t/lex_strict.t
 SHA1 055eb0a5757e4fa76934e697ea935f12e0636d11 t/lex_variable.t
 SHA1 f8c514c92a272ff76d0ed39d02fc67002cbd5140 t/lex_warnings.t
+SHA1 2b69b4b8fb4cef2bd203ddfb1aa7cc75db582275 t/leximport.t
 SHA1 953a7e0437837a1a50f7bb8b15646c706ab308db t/magicblock.t
 SHA1 20319b3f5f9cd668d65b3c860574a6864e331ef7 t/name.t
 SHA1 aa678d2b5d1be7043433baa210cb3489c648dee7 t/nest_capture.t
@@ -47,7 +48,7 @@ SHA1 079d1c5792a213e22ae3d340e07a8929769f4154 t/return.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.4.9 (GNU/Linux)
 
-iEYEARECAAYFAksJNqIACgkQOV9mt2VyAVG99ACghwuEMpPY+FuvwMbABIRO/vrR
-MeUAniemDLOGwqkW6v80P3bIqL2LYtfs
-=twhU
+iEYEARECAAYFAkxGHG4ACgkQOV9mt2VyAVEF0gCfb5lMzld18xU7gMoiOwaDjDDU
+AjUAoJY+XveFLW6iY7zWtw7J7tC3S5Je
+=U4ZW
 -----END PGP SIGNATURE-----
