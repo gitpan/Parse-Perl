@@ -12,7 +12,7 @@ $SIG{__WARN__} = sub {
 	push @main::activity, "WARNING: $warn";
 };
 
-my $have_unitcheck = $] >= 5.009005;
+my $have_unitcheck = "$]" >= 5.009005;
 
 @main::activity = ();
 my $func = parse_perl(current_environment, q{

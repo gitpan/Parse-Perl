@@ -14,7 +14,7 @@ $env_0 = current_environment;
 	$env_B = current_environment;
 }
 
-my $have_runtime_hint_hash = $] >= 5.009004;
+my $have_runtime_hint_hash = "$]" >= 5.009004;
 
 sub test_env_1() {
 	push @main::activity, [

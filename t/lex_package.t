@@ -65,7 +65,7 @@ sub test_env_n($$$) {
 }
 
 SKIP: {
-	skip "package not nullable on this Perl", 6 unless $] < 5.009;
+	skip "package not nullable on this Perl", 6 unless "$]" < 5.009;
 	eval q{
 		package;
 		$main::env_0 = main::current_environment;

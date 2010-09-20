@@ -1,3 +1,20 @@
+version 0.003; 2010-09-20
+
+  * port to Perl 5.13.5: yyparse() takes a parameter
+
+  * don't skip tests for $[ on 5.13 and the future 5.14, now that $[
+    won't be removed until 5.15
+
+  * in XS, use gv_stashpvs() wherever appropriate
+
+  * use full stricture in test suite
+
+  * in test suite, make all numeric comparisons against $] stringify it
+    first, to avoid architecture-dependent problems with floating point
+    rounding giving it an unexpected numeric value
+
+  * in Build.PL, complete declaration of configure-time requirements
+
 version 0.002; 2010-07-20
 
   * make current_environment operator compile correctly when imported

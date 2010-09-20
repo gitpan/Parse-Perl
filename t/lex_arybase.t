@@ -3,7 +3,7 @@ no warnings "deprecated";
 use strict;
 
 BEGIN {
-	if($] >= 5.013) {
+	if("$]" >= 5.015) {
 		require Test::More;
 		Test::More::plan(skip_all => "no \$[ on this Perl");
 	}

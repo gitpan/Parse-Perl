@@ -67,6 +67,10 @@ static SV *THX_newSV_type(pTHX_ svtype type)
 }
 #endif /* !newSV_type */
 
+#ifndef gv_stashpvs
+# define gv_stashpvs(name, flags) gv_stashpvn(""name"", sizeof(name)-1, flags)
+#endif /* !gv_stashpvs */
+
 #ifndef gv_fetchpvs
 # ifdef gv_fetchpvn_flags
 #  define gv_fetchpvs(name, flags, type) \
@@ -130,6 +134,12 @@ static SV *THX_newSV_type(pTHX_ svtype type)
 		PL_error_count = 0; \
 	} while(0)
 #endif /* <5.9.5 */
+
+#if PERL_VERSION_GE(5,13,5)
+# define yyparse_prog() yyparse(GRAMPROG)
+#else /* <5.13.5 */
+# define yyparse_prog() yyparse()
+#endif /* <5.13.5 */
 
 #define sv_is_glob(sv) (SvTYPE(sv) == SVt_PVGV)
 
@@ -744,8 +754,8 @@ BOOT:
 	SvREADONLY_on(undef_sv);
 	pkgname_env = newSVpvs("Parse::Perl::Environment");
 	SvREADONLY_on(pkgname_env);
-	stash_env = gv_stashpv("Parse::Perl::Environment", 1);
-	stash_cophh = gv_stashpv("Parse::Perl::CopHintsHash", 1);
+	stash_env = gv_stashpvs("Parse::Perl::Environment", 1);
+	stash_cophh = gv_stashpvs("Parse::Perl::CopHintsHash", 1);
 	warnsv_all = newSVpvn(WARN_ALLstring, WARNsize);
 	SvREADONLY_on(warnsv_all);
 	warnsv_none = newSVpvn(WARN_NONEstring, WARNsize);
@@ -879,7 +889,7 @@ CODE:
 		old_in_eval = PL_in_eval;
 		PL_in_eval = EVAL_INEVAL;
 		lex_start_simple(source);
-		parse_fail = yyparse();
+		parse_fail = yyparse_prog();
 		lex_end();
 		PL_in_eval = old_in_eval;
 		if(parse_fail || PL_error_count || !PL_eval_root ||
