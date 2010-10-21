@@ -141,6 +141,14 @@ static SV *THX_newSV_type(pTHX_ svtype type)
 # define yyparse_prog() yyparse()
 #endif /* <5.13.5 */
 
+#ifndef op_append_elem
+# define op_append_elem(t,f,l) append_elem(t,f,l)
+#endif /* !op_append_elem */
+
+#ifndef croak
+# define croak Perl_croak_nocontext
+#endif /* !croak */
+
 #define sv_is_glob(sv) (SvTYPE(sv) == SVt_PVGV)
 
 #if PERL_VERSION_GE(5,11,0)
@@ -230,7 +238,7 @@ static SV *THX_package_to_sv(pTHX_ HV *pkg)
 static HV *THX_package_from_sv(pTHX_ SV *sv)
 {
 	if(sv_is_undef(sv)) return NULL;
-	if(!sv_is_string(sv)) Perl_croak(aTHX_ "malformed package name");
+	if(!sv_is_string(sv)) croak("malformed package name");
 	return gv_stashsv(sv, GV_ADD);
 }
 
@@ -245,8 +253,7 @@ static SV *THX_iv_to_sv(pTHX_ IV iv)
 #define iv_from_sv(sv) THX_iv_from_sv(aTHX_ sv)
 static IV THX_iv_from_sv(pTHX_ SV *sv)
 {
-	if(!(sv_is_string(sv) && SvIOK(sv)))
-		Perl_croak(aTHX_ "malformed integer");
+	if(!(sv_is_string(sv) && SvIOK(sv))) croak("malformed integer");
 	return SvIV(sv);
 }
 
@@ -261,8 +268,7 @@ static SV *THX_uv_to_sv(pTHX_ UV uv)
 #define uv_from_sv(sv) THX_uv_from_sv(aTHX_ sv)
 static UV THX_uv_from_sv(pTHX_ SV *sv)
 {
-	if(!(sv_is_string(sv) && SvIOK(sv)))
-		Perl_croak(aTHX_ "malformed integer");
+	if(!(sv_is_string(sv) && SvIOK(sv))) croak("malformed integer");
 	return SvUV(sv);
 }
 
@@ -302,8 +308,7 @@ static WARNINGS_t *THX_warnings_from_sv(pTHX_ SV *sv)
 		char *warn_octets;
 		STRLEN len;
 		STRLEN *warnings;
-		if(!sv_is_string(sv))
-			Perl_croak(aTHX_ "malformed warnings bitset");
+		if(!sv_is_string(sv)) croak("malformed warnings bitset");
 		warn_octets = SvPV(sv, len);
 		warnings = PerlMemShared_malloc(sizeof(*warnings) + len);
 		warnings[0] = len;
@@ -359,7 +364,7 @@ static struct refcounted_he *THX_cophh_from_sv(pTHX_ SV *sv)
 	if(!(SvROK(sv) && (usv = SvRV(sv), 1) &&
 			SvOBJECT(usv) && SvSTASH(usv) == stash_cophh &&
 			SvIOK(usv)))
-		Perl_croak(aTHX_ "malformed cop_hints_hash");
+		croak("malformed cop_hints_hash");
 	cophh = (struct refcounted_he *)SvUV(usv);
 	refcounted_he_inc(cophh);
 	return cophh;
@@ -411,7 +416,7 @@ static HV *THX_hinthash_from_sv(pTHX_ SV *sv)
 	if(sv_is_undef(sv)) return NULL;
 	if(!(SvROK(sv) && (hh_copy = (HV*)SvRV(sv), 1) &&
 			SvTYPE((SV*)hh_copy) == SVt_PVHV))
-		Perl_croak(aTHX_ "malformed hint hash");
+		croak("malformed hint hash");
 #ifdef PERL_MAGIC_hints
 	return hv_copy_hints_hv(hh_copy);
 #else /* !PERL_MAGIC_hints */
@@ -432,7 +437,7 @@ static CV *THX_function_from_sv(pTHX_ SV *sv)
 {
 	SV *func;
 	if(!(SvROK(sv) && (func = SvRV(sv), 1) && SvTYPE(func) == SVt_PVCV))
-		Perl_croak(aTHX_ "malformed function reference");
+		croak("malformed function reference");
 	return (CV*)SvREFCNT_inc(func);
 }
 
@@ -449,7 +454,7 @@ static AV *THX_array_from_sv(pTHX_ SV *sv)
 {
 	SV *array;
 	if(!(SvROK(sv) && (array = SvRV(sv), 1) && SvTYPE(array) == SVt_PVAV))
-		Perl_croak(aTHX_ "malformed array reference");
+		croak("malformed array reference");
 	return (AV*)SvREFCNT_inc(array);
 }
 
@@ -534,37 +539,37 @@ static OP *THX_gen_current_environment_op(pTHX)
 	/*
 	 * Generate bless([...], "Parse::Perl::Environment") op tree, that
 	 * will assemble an environment object at runtime.  The order of
-	 * the append_elem clauses must match the ENV_ enumeration.
+	 * the op_append_elem clauses must match the ENV_ enumeration.
 	 */
 	op = NULL;
-	op = append_elem(OP_LIST, op, /* ENV_PACKAGE */
+	op = op_append_elem(OP_LIST, op, /* ENV_PACKAGE */
 		newSVOP(OP_CONST, 0,
 			package_to_sv(PL_curstash)));
-	op = append_elem(OP_LIST, op, /* ENV_WARNINGS */
+	op = op_append_elem(OP_LIST, op, /* ENV_WARNINGS */
 		newSVOP(OP_CONST, 0,
 			warnings_to_sv(PL_compiling.cop_warnings)));
 #if QHAVE_COP_ARYBASE
-	op = append_elem(OP_LIST, op, /* ENV_ARYBASE */
+	op = op_append_elem(OP_LIST, op, /* ENV_ARYBASE */
 		newSVOP(OP_CONST, 0,
 			iv_to_sv(PL_compiling.cop_arybase)));
 #endif /* QHAVE_COP_ARYBASE */
 #if QHAVE_COP_IO
-	op = append_elem(OP_LIST, op, /* ENV_IOHINT */
+	op = op_append_elem(OP_LIST, op, /* ENV_IOHINT */
 		newSVOP(OP_CONST, 0,
 			iohint_to_sv(PL_compiling.cop_io)));
 #endif /* QHAVE_COP_IO */
-	op = append_elem(OP_LIST, op, /* ENV_HINTBITS */
+	op = op_append_elem(OP_LIST, op, /* ENV_HINTBITS */
 		newSVOP(OP_CONST, 0,
 			uv_to_sv(PL_hints)));
 #if QHAVE_COP_HINTS_HASH
-	op = append_elem(OP_LIST, op, /* ENV_COPHINTHASH */
+	op = op_append_elem(OP_LIST, op, /* ENV_COPHINTHASH */
 		newSVOP(OP_CONST, 0,
 			cophh_to_sv(PL_compiling.cop_hints_hash)));
 #endif /* QHAVE_COP_HINTS_HASH */
-	op = append_elem(OP_LIST, op, /* ENV_HINTHASH */
+	op = op_append_elem(OP_LIST, op, /* ENV_HINTHASH */
 		newSVOP(OP_CONST, 0,
 			hinthash_to_sv(GvHV(PL_hintgv))));
-	op = append_elem(OP_LIST, op, /* ENV_OUTSIDE{CV,SEQ,PAD} */
+	op = op_append_elem(OP_LIST, op, /* ENV_OUTSIDE{CV,SEQ,PAD} */
 		gen_current_pad_op());
 	return newLISTOP(OP_BLESS, 0, newANONLIST(op),
 		newSVOP(OP_CONST, 0, SvREFCNT_inc(pkgname_env)));
@@ -739,8 +744,8 @@ static void THX_close_pad(pTHX_ CV *func, AV *outpad)
 				(vref = safe_av_fetch(outpad, pix), 1) &&
 				SvROK(vref) && (vsv = SvRV(vref), 1) &&
 				!(SvPADSTALE(vsv) && !SvPAD_STATE(namesv))))
-			Perl_croak(aTHX_ "Variable \"%s\" is not available",
-					SvPVX_const(namesv));
+			croak("Variable \"%s\" is not available",
+				SvPVX_const(namesv));
 		SvREFCNT_inc(vsv);
 		if(ppad[ix]) SvREFCNT_dec(ppad[ix]);
 		ppad[ix] = vsv;
@@ -769,7 +774,7 @@ void
 current_environment(...)
 PROTOTYPE:
 CODE:
-	Perl_croak(aTHX_ "current_environment called as a function");
+	croak("current_environment called as a function");
 
 CV *
 parse_perl(SV *environment, SV *source)
@@ -784,8 +789,8 @@ CODE:
 			SvOBJECT((SV*)enva) &&
 			SvSTASH((SV*)enva) == stash_env &&
 			SvTYPE((SV*)enva) == SVt_PVAV))
-		Perl_croak(aTHX_ "environment is not an environment object");
-	if(!sv_is_string(source)) Perl_croak(aTHX_ "source is not a string");
+		croak("environment is not an environment object");
+	if(!sv_is_string(source)) croak("source is not a string");
 	ENTER;
 	SAVETMPS;
 	/* populate PL_compiling and related state */
@@ -940,7 +945,7 @@ CODE:
 	if(!(SvROK(sv) && (usv = SvRV(sv), 1) &&
 			SvOBJECT(usv) && SvSTASH(usv) == stash_cophh &&
 			SvIOK(usv)))
-		Perl_croak(aTHX_ "malformed cop_hints_hash");
+		croak("malformed cop_hints_hash");
 	cophh = (struct refcounted_he *)SvUV(usv);
 	refcounted_he_free(cophh);
 #endif /* QHAVE_COP_HINTS_HASH */

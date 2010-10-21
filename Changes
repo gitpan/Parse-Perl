@@ -1,3 +1,11 @@
+version 0.004; 2010-10-21
+
+  * port to Perl 5.13.6: append_elem() (newly in the API) renamed to
+    op_append_elem()
+
+  * in XS, provide a reserve definition of croak, so that the Perl_croak
+    circumlocution is avoided even with PERL_CORE defined
+
 version 0.003; 2010-09-20
 
   * port to Perl 5.13.5: yyparse() takes a parameter

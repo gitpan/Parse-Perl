@@ -25,13 +25,13 @@ name: Parse-Perl
 provides:
   Parse::Perl:
     file: lib/Parse/Perl.pm
-    version: 0.003
+    version: 0.004
   Parse::Perl::CopHintsHash:
     file: lib/Parse/Perl.pm
-    version: 0.003
+    version: 0.004
   Parse::Perl::Environment:
     file: lib/Parse/Perl.pm
-    version: 0.003
+    version: 0.004
 requires:
   Exporter: 0
   XSLoader: 0
@@ -41,4 +41,4 @@ requires:
   warnings: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.003
+version: 0.004
