@@ -4,7 +4,17 @@ use strict;
 
 use Module::Build;
 
-Module::Build->new(
+Module::Build->subclass(code => q{
+	sub compile_c {
+		my($self, $file, %args) = @_;
+		# need PERL_CORE for working HINTS_REFCNT_LOCK and
+		# GRAMPROG constant
+		$args{defines} = { %{$args{defines} || {}},
+			PERL_CORE => 1,
+		};
+		return $self->SUPER::compile_c($file, %args);
+	}
+})->new(
 	module_name => "Parse::Perl",
 	license => "perl",
 	configure_requires => {

@@ -1,5 +1,4 @@
 #define PERL_NO_GET_CONTEXT 1
-#define PERL_CORE 1   /* required for HINTS_REFCNT_LOCK et al */
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -62,7 +61,7 @@
 static SV *THX_newSV_type(pTHX_ svtype type)
 {
 	SV *sv = newSV(0);
-	SvUPGRADE(sv, type);
+	(void) SvUPGRADE(sv, type);
 	return sv;
 }
 #endif /* !newSV_type */
@@ -124,8 +123,77 @@ static SV *THX_newSV_type(pTHX_ svtype type)
 # define CvGV_set(cv, val) (CvGV(cv) = val)
 #endif /*!CvGV_set */
 
+#ifndef lex_start
+# define lex_start(l,r,f) Perl_lex_start(aTHX_ l,r,f)
+#endif /* !lex_start */
+
+#if PERL_VERSION_GE(5,13,7)
+# define lex_end() 0
+#else /* <5.13.7 */
+# ifndef lex_end
+#  define lex_end() Perl_lex_end(aTHX)
+# endif /* !lex_end */
+#endif /* <5.13.7 */
+
+#ifndef op_append_elem
+# define op_append_elem(t,f,l) append_elem(t,f,l)
+# ifndef append_elem
+#  define append_elem(t,f,l) Perl_append_elem(aTHX_ t,f,l)
+# endif /* !append_elem */
+#endif /* !op_append_elem */
+
+#ifndef croak
+# define croak Perl_croak_nocontext
+#endif /* !croak */
+
+#if QHAVE_COP_HINTS_HASH && !PERL_VERSION_GE(5,13,7)
+
+# define refcounted_he_inc(rhe) THX_refcounted_he_inc(aTHX_ rhe)
+static struct refcounted_he *THX_refcounted_he_inc(pTHX_
+	struct refcounted_he *rhe)
+{
+	if(rhe) {
+		HINTS_REFCNT_LOCK;
+		rhe->refcounted_he_refcnt++;
+		HINTS_REFCNT_UNLOCK;
+	}
+	return rhe;
+}
+
+# ifndef refcounted_he_free
+#  define refcounted_he_free(rhe) Perl_refcounted_he_free(aTHX_ rhe)
+# endif /* !refcounted_he_free */
+
+typedef struct refcounted_he COPHH;
+# define cophh_copy refcounted_he_inc
+# define cophh_free refcounted_he_free
+
+# define CopHINTHASH_get(c) ((COPHH*)((c)->cop_hints_hash))
+# define CopHINTHASH_set(c,h) ((c)->cop_hints_hash = (h))
+
+#endif /* QHAVE_COP_HINTS_HASH && <5.13.7 */
+
+#ifdef PERL_MAGIC_hints
+# ifndef hv_copy_hints_hv
+#  define hv_copy_hints_hv(hv) Perl_hv_copy_hints_hv(aTHX_ hv)
+# endif /* !hv_copy_hints_hv */
+#endif /* PERL_MAGIC_hints */
+
+#ifndef pad_new
+# define pad_new(f) Perl_pad_new(aTHX_ f)
+#endif /* !pad_new */
+
+#ifndef pad_tidy
+# define pad_tidy(t) Perl_pad_tidy(aTHX_ t)
+#endif /* !pad_new */
+
 #if PERL_VERSION_GE(5,9,5)
 # define PL_error_count (PL_parser->error_count)
+#endif /* >=5.9.5 */
+
+#if PERL_VERSION_GE(5,13,7)
+# define lex_start_simple(line) lex_start(line, NULL, 0)
+#elif PERL_VERSION_GE(5,9,5)
 # define lex_start_simple(line) lex_start(line, NULL, 1)
 #else /* <5.9.5 */
 # define lex_start_simple(line) do { \
@@ -136,18 +204,38 @@ static SV *THX_newSV_type(pTHX_ svtype type)
 #endif /* <5.9.5 */
 
 #if PERL_VERSION_GE(5,13,5)
+# ifndef yyparse
+#  define yyparse(g) Perl_yyparse(aTHX_ g)
+# endif /* !yyparse */
 # define yyparse_prog() yyparse(GRAMPROG)
 #else /* <5.13.5 */
+# ifndef yyparse
+#  define yyparse() Perl_yyparse(aTHX)
+# endif /* !yyparse */
 # define yyparse_prog() yyparse()
 #endif /* <5.13.5 */
 
-#ifndef op_append_elem
-# define op_append_elem(t,f,l) append_elem(t,f,l)
-#endif /* !op_append_elem */
-
-#ifndef croak
-# define croak Perl_croak_nocontext
-#endif /* !croak */
+#ifndef CvSTASH_set
+# if PERL_VERSION_GE(5,13,3)
+#  ifndef sv_del_backref
+#   define sv_del_backref(t,s) Perl_sv_del_backref(aTHX_ t,s)
+#  endif /* !sv_del_backref */
+#  ifndef sv_add_backref
+#   define sv_add_backref(t,s) Perl_sv_add_backref(aTHX_ t,s)
+PERL_CALLCONV void Perl_sv_add_backref(pTHX_ SV *t, SV *s);
+#  endif /* !sv_add_backref */
+#  define CvSTASH_set(cv, newst) THX_cvstash_set(aTHX_ cv, newst)
+static void THX_cvstash_set(pTHX_ CV *cv, HV *newst)
+{
+	HV *oldst = CvSTASH(cv);
+	if(oldst) sv_del_backref((SV*)oldst, (SV*)cv);
+	CvSTASH(cv) = newst;
+	if(newst) sv_add_backref((SV*)newst, (SV*)cv);
+}
+# else /* <5.13.3 */
+#  define CvSTASH_set(cv, newst) (CvSTASH(cv) = (newst))
+# endif /* <5.13.3 */
+#endif /* !CvSTASH_set */
 
 #define sv_is_glob(sv) (SvTYPE(sv) == SVt_PVGV)
 
@@ -193,30 +281,6 @@ static SV *warnsv_all, *warnsv_none;
 static OP *(*nxck_entersub)(pTHX_ OP *op);
 static CV *curenv_cv;
 
-#if QHAVE_COP_HINTS_HASH
-
-# define refcounted_he_inc(rhe) THX_refcounted_he_inc(aTHX_ rhe)
-static struct refcounted_he *THX_refcounted_he_inc(pTHX_
-	struct refcounted_he *rhe)
-{
-	HINTS_REFCNT_LOCK;
-	rhe->refcounted_he_refcnt++;
-	HINTS_REFCNT_UNLOCK;
-	return rhe;
-}
-
-# ifndef refcounted_he_free
-#  define refcounted_he_free(rhe) Perl_refcounted_he_free(aTHX_ rhe)
-# endif /* !refcounted_he_free */
-
-# ifdef PERL_MAGIC_hints
-#  ifndef hv_copy_hints_hv
-#   define hv_copy_hints_hv(hv) Perl_hv_copy_hints_hv(aTHX_ hv)
-#  endif /* !hv_copy_hints_hv */
-# endif /* PERL_MAGIC_hints */
-
-#endif /* QHAVE_COP_HINTS_HASH */
-
 #define safe_av_fetch(av, index) THX_safe_av_fetch(aTHX_ av, index)
 static SV *THX_safe_av_fetch(pTHX_ AV *av, I32 index)
 {
@@ -242,7 +306,9 @@ static HV *THX_package_from_sv(pTHX_ SV *sv)
 	return gv_stashsv(sv, GV_ADD);
 }
 
-#define iv_to_sv(iv) THX_iv_to_sv(aTHX_ iv)
+#if QHAVE_COP_ARYBASE
+
+# define iv_to_sv(iv) THX_iv_to_sv(aTHX_ iv)
 static SV *THX_iv_to_sv(pTHX_ IV iv)
 {
 	SV *sv = newSViv(iv);
@@ -250,12 +316,14 @@ static SV *THX_iv_to_sv(pTHX_ IV iv)
 	return sv;
 }
 
-#define iv_from_sv(sv) THX_iv_from_sv(aTHX_ sv)
+# define iv_from_sv(sv) THX_iv_from_sv(aTHX_ sv)
 static IV THX_iv_from_sv(pTHX_ SV *sv)
 {
 	if(!(sv_is_string(sv) && SvIOK(sv))) croak("malformed integer");
 	return SvIV(sv);
 }
+
+#endif /* !QHAVE_COP_ARYBASE */
 
 #define uv_to_sv(uv) THX_uv_to_sv(aTHX_ uv)
 static SV *THX_uv_to_sv(pTHX_ UV uv)
@@ -342,11 +410,11 @@ static SV *THX_iohint_from_sv(pTHX_ SV *sv)
 #if QHAVE_COP_HINTS_HASH
 
 #define cophh_to_sv(cophh) THX_cophh_to_sv(aTHX_ cophh)
-static SV *THX_cophh_to_sv(pTHX_ struct refcounted_he *cophh)
+static SV *THX_cophh_to_sv(pTHX_ COPHH *cophh)
 {
 	SV *usv, *rsv;
+	cophh = cophh_copy(cophh);
 	if(!cophh) return SvREFCNT_inc(undef_sv);
-	refcounted_he_inc(cophh);
 	usv = newSVuv((UV)cophh);
 	rsv = newRV_noinc(usv);
 	sv_bless(rsv, stash_cophh);
@@ -356,18 +424,20 @@ static SV *THX_cophh_to_sv(pTHX_ struct refcounted_he *cophh)
 }
 
 #define cophh_from_sv(sv) THX_cophh_from_sv(aTHX_ sv)
-static struct refcounted_he *THX_cophh_from_sv(pTHX_ SV *sv)
+static COPHH *THX_cophh_from_sv(pTHX_ SV *sv)
 {
 	SV *usv;
-	struct refcounted_he *cophh;
-	if(sv_is_undef(sv)) return NULL;
-	if(!(SvROK(sv) && (usv = SvRV(sv), 1) &&
+	COPHH *cophh;
+	if(sv_is_undef(sv)) {
+		cophh = NULL;
+	} else if(SvROK(sv) && (usv = SvRV(sv), 1) &&
 			SvOBJECT(usv) && SvSTASH(usv) == stash_cophh &&
-			SvIOK(usv)))
+			SvIOK(usv)) {
+		cophh = (COPHH *)SvUV(usv);
+	} else {
 		croak("malformed cop_hints_hash");
-	cophh = (struct refcounted_he *)SvUV(usv);
-	refcounted_he_inc(cophh);
-	return cophh;
+	}
+	return cophh_copy(cophh);
 }
 
 #endif /* QHAVE_COP_HINTS_HASH */
@@ -389,7 +459,7 @@ static HV *THX_copy_hv(pTHX_ HV *hin, int readonly)
 		while((entry = hv_iternext_flags(hin, 0))) {
 			SV *sv = newSVsv(HeVAL(entry));
 			if(readonly) SvREADONLY_on(sv);
-			hv_store_flags(hout, HeKEY(entry), HeKLEN(entry),
+			(void) hv_store_flags(hout, HeKEY(entry), HeKLEN(entry),
 				sv, HeHASH(entry), HeKFLAGS(entry));
 		}
 		HvRITER_set(hin, save_riter);
@@ -441,13 +511,15 @@ static CV *THX_function_from_sv(pTHX_ SV *sv)
 	return (CV*)SvREFCNT_inc(func);
 }
 
-#define array_to_sv(array) THX_array_to_sv(aTHX_ array)
+#if 0
+# define array_to_sv(array) THX_array_to_sv(aTHX_ array)
 static SV *THX_array_to_sv(pTHX_ AV *array)
 {
 	SV *sv = newRV_inc((SV*)array);
 	SvREADONLY_on(sv);
 	return sv;
 }
+#endif /* 0 */
 
 #define array_from_sv(sv) THX_array_from_sv(aTHX_ sv)
 static AV *THX_array_from_sv(pTHX_ SV *sv)
@@ -532,8 +604,19 @@ static OP *THX_gen_current_environment_op(pTHX)
 		fname = AvFILLp(padname);
 		for(ix = fname+1; ix--; ) {
 			SV *namesv = pname[ix];
-			if(namesv && SvPOKp(namesv) && SvCUR(namesv) > 1)
-				(void)pad_findmy_sv(namesv);
+			if(namesv && SvPOKp(namesv) && SvCUR(namesv) > 1) {
+				/*
+				 * Perl_pad_findmy() is marked as having
+				 * an unignorable return value.  In fact
+				 * we're executing it for side effects
+				 * here (the side effect of allocating
+				 * a slot in the current pad for a
+				 * lexically inherited variable), and it
+				 * is correct to ignore the return value.
+				 * Expect a compiler warning.
+				 */
+				(void) pad_findmy_sv(namesv);
+			}
 		}
 	}
 	/*
@@ -564,7 +647,7 @@ static OP *THX_gen_current_environment_op(pTHX)
 #if QHAVE_COP_HINTS_HASH
 	op = op_append_elem(OP_LIST, op, /* ENV_COPHINTHASH */
 		newSVOP(OP_CONST, 0,
-			cophh_to_sv(PL_compiling.cop_hints_hash)));
+			cophh_to_sv(CopHINTHASH_get(&PL_compiling))));
 #endif /* QHAVE_COP_HINTS_HASH */
 	op = op_append_elem(OP_LIST, op, /* ENV_HINTHASH */
 		newSVOP(OP_CONST, 0,
@@ -658,7 +741,12 @@ static void THX_populate_pad_from_sub(pTHX_ CV *func)
 				SvPOKp(namesv) && SvCUR(namesv) > 1 &&
 				SvFAKE(namesv) &&
 				var_from_outside_compcv(func, namesv)) {
-			(void)pad_findmy_sv(namesv);
+			/*
+			 * As noted in THX_gen_current_environment_op(),
+			 * this statement will generate a compiler
+			 * warning relating to Perl_pad_findmy().
+			 */
+			(void) pad_findmy_sv(namesv);
 		}
 	}
 }
@@ -754,6 +842,8 @@ static void THX_close_pad(pTHX_ CV *func, AV *outpad)
 
 MODULE = Parse::Perl PACKAGE = Parse::Perl
 
+PROTOTYPES: DISABLE
+
 BOOT:
 	undef_sv = newSV(0);
 	SvREADONLY_on(undef_sv);
@@ -774,6 +864,7 @@ void
 current_environment(...)
 PROTOTYPE:
 CODE:
+	PERL_UNUSED_VAR(items);
 	croak("current_environment called as a function");
 
 CV *
@@ -844,10 +935,10 @@ CODE:
 	}
 #if QHAVE_COP_HINTS_HASH
 	{
-		struct refcounted_he *old_cophh = PL_compiling.cop_hints_hash;
-		PL_compiling.cop_hints_hash =
-			cophh_from_sv(safe_av_fetch(enva, ENV_COPHINTHASH));
-		if(old_cophh) refcounted_he_free(old_cophh);
+		COPHH *old_cophh = CopHINTHASH_get(&PL_compiling);
+		CopHINTHASH_set(&PL_compiling,
+			cophh_from_sv(safe_av_fetch(enva, ENV_COPHINTHASH)));
+		cophh_free(old_cophh);
 	}
 #endif /* QHAVE_COP_HINTS_HASH */
 #if QHAVE_COP_HINTS
@@ -864,7 +955,7 @@ CODE:
 	SAVEGENERICSV(PL_compcv);
 	PL_compcv = (CV*)newSV_type(SVt_PVCV);
 	CvANON_on(PL_compcv);
-	CvSTASH(PL_compcv) = PL_curstash;
+	CvSTASH_set(PL_compcv, PL_curstash);
 	CvGV_set(PL_compcv, PL_curstash ?
 		gv_fetchpvs("__ANON__", GV_ADDMULTI, SVt_PVCV) :
 		gv_fetchpvs("__ANON__::__ANON__", GV_ADDMULTI, SVt_PVCV));
@@ -938,14 +1029,20 @@ DESTROY(SV *sv)
 PREINIT:
 #if QHAVE_COP_HINTS_HASH
 	SV *usv;
-	struct refcounted_he *cophh;
+	COPHH *cophh;
 #endif /* QHAVE_COP_HINTS_HASH */
 CODE:
 #if QHAVE_COP_HINTS_HASH
-	if(!(SvROK(sv) && (usv = SvRV(sv), 1) &&
+	if(sv_is_undef(sv)) {
+		cophh = NULL;
+	} else if(SvROK(sv) && (usv = SvRV(sv), 1) &&
 			SvOBJECT(usv) && SvSTASH(usv) == stash_cophh &&
-			SvIOK(usv)))
+			SvIOK(usv)) {
+		cophh = (COPHH *)SvUV(usv);
+	} else {
 		croak("malformed cop_hints_hash");
-	cophh = (struct refcounted_he *)SvUV(usv);
-	refcounted_he_free(cophh);
-#endif /* QHAVE_COP_HINTS_HASH */
+	}
+	cophh_free(cophh);
+#else /* !QHAVE_COP_HINTS_HASH */
+	PERL_UNUSED_VAR(sv);
+#endif /* !QHAVE_COP_HINTS_HASH */

@@ -1,3 +1,18 @@
+version 0.005; 2010-11-21
+
+  * bugfix: on Perl 5.13.3 and above, maintain CvSTASH backrefences
+    correctly
+
+  * port to Perl 5.13.7: lex_start() is in the API and the meaning of
+    its third parameter changes; lex_end() disappears; cop_hints_hash
+    can be manipulated through a new API
+
+  * in XS, declare "PROTOTYPES: DISABLE" to prevent automatic generation
+    of unintended prototypes
+
+  * jump through hoops to avoid compiler warnings, and add a comment
+    about an unavoidable compiler warning
+
 version 0.004; 2010-10-21
 
   * port to Perl 5.13.6: append_elem() (newly in the API) renamed to
