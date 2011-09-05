@@ -50,11 +50,13 @@
 # endif /* >=5.9.0 */
 #endif /* !PARENT_PAD_INDEX */
 
-#if PERL_VERSION_GE(5,11,2)
-# define pad_findmy_sv(sv) pad_findmy(SvPVX(sv), SvCUR(sv), 0)
-#else /* <5.11.2 */
-# define pad_findmy_sv(sv) pad_findmy(SvPVX(sv))
-#endif /* <5.11.2 */
+#ifndef pad_findmy_sv
+# if PERL_VERSION_GE(5,11,2)
+#  define pad_findmy_sv(sv, flags) pad_findmy(SvPVX(sv), SvCUR(sv), flags)
+# else /* <5.11.2 */
+#  define pad_findmy_sv(sv, flags) pad_findmy(SvPVX(sv))
+# endif /* <5.11.2 */
+#endif /* !pad_findmy_sv */
 
 #ifndef newSV_type
 # define newSV_type(type) THX_newSV_type(aTHX_ type)
@@ -606,6 +608,7 @@ static OP *THX_gen_current_environment_op(pTHX)
 			SV *namesv = pname[ix];
 			if(namesv && SvPOKp(namesv) && SvCUR(namesv) > 1) {
 				/*
+				 * Perl_pad_findmy_sv() or
 				 * Perl_pad_findmy() is marked as having
 				 * an unignorable return value.  In fact
 				 * we're executing it for side effects
@@ -615,7 +618,7 @@ static OP *THX_gen_current_environment_op(pTHX)
 				 * is correct to ignore the return value.
 				 * Expect a compiler warning.
 				 */
-				(void) pad_findmy_sv(namesv);
+				(void) pad_findmy_sv(namesv, 0);
 			}
 		}
 	}
@@ -744,9 +747,10 @@ static void THX_populate_pad_from_sub(pTHX_ CV *func)
 			/*
 			 * As noted in THX_gen_current_environment_op(),
 			 * this statement will generate a compiler
-			 * warning relating to Perl_pad_findmy().
+			 * warning relating to Perl_pad_findmy_sv() or
+			 * Perl_pad_findmy().
 			 */
-			(void) pad_findmy_sv(namesv);
+			(void) pad_findmy_sv(namesv, 0);
 		}
 	}
 }

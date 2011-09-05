@@ -14,9 +14,8 @@ configure_requires:
   perl: 5.008004
   strict: 0
   warnings: 0
-distribution_type: module
 dynamic_config: 0
-generated_by: 'Module::Build version 0.3607'
+generated_by: 'Module::Build version 0.38, CPAN::Meta::Converter version 2.112150'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -25,13 +24,13 @@ name: Parse-Perl
 provides:
   Parse::Perl:
     file: lib/Parse/Perl.pm
-    version: 0.005
+    version: 0.006
   Parse::Perl::CopHintsHash:
     file: lib/Parse/Perl.pm
-    version: 0.005
+    version: 0.006
   Parse::Perl::Environment:
     file: lib/Parse/Perl.pm
-    version: 0.005
+    version: 0.006
 requires:
   Exporter: 0
   XSLoader: 0
@@ -41,4 +40,4 @@ requires:
   warnings: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.005
+version: 0.006
