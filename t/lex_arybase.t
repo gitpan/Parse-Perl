@@ -3,7 +3,8 @@ no warnings "deprecated";
 use strict;
 
 BEGIN {
-	if("$]" >= 5.015) {
+	if("$]" >= 5.015003 &&
+			("$]" < 5.015005 || !(eval { require arybase; 1; }))) {
 		require Test::More;
 		Test::More::plan(skip_all => "no \$[ on this Perl");
 	}
@@ -25,25 +26,25 @@ sub test_env($$$) {
 	@main::activity = ();
 	parse_perl($env, q{
 		}.(defined($override) ? "\$[ = $override;" : "").q{
-		push @main::activity, [ $[, (qw(a b c d e))[3] ];
+		push @main::activity, [ (qw(a b c d e))[3], $[ ];
 	})->();
 	is_deeply \@main::activity, $expect;
 }
 
-test_env $env_0, undef, [[ 0, "d" ]];
-test_env $env_1, undef, [[ 1, "c" ]];
-test_env $env_2, undef, [[ 2, "b" ]];
-test_env $env_0, undef, [[ 0, "d" ]];
+test_env $env_0, undef, [[ "d", 0 ]];
+test_env $env_1, undef, [[ "c", 1 ]];
+test_env $env_2, undef, [[ "b", 2 ]];
+test_env $env_0, undef, [[ "d", 0 ]];
 
-test_env $env_0, 0, [[ 0, "d" ]];
-test_env $env_1, 0, [[ 0, "d" ]];
-test_env $env_2, 0, [[ 0, "d" ]];
+test_env $env_0, 0, [[ "d", 0 ]];
+test_env $env_1, 0, [[ "d", 0 ]];
+test_env $env_2, 0, [[ "d", 0 ]];
 
-test_env $env_0, 1, [[ 1, "c" ]];
-test_env $env_1, 1, [[ 1, "c" ]];
-test_env $env_2, 1, [[ 1, "c" ]];
+test_env $env_0, 1, [[ "c", 1 ]];
+test_env $env_1, 1, [[ "c", 1 ]];
+test_env $env_2, 1, [[ "c", 1 ]];
 
-test_env $env_2, 0, [[ 0, "d" ]];
-test_env $env_2, 1, [[ 1, "c" ]];
+test_env $env_2, 0, [[ "d", 0 ]];
+test_env $env_2, 1, [[ "c", 1 ]];
 
 1;

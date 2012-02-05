@@ -1,6 +1,7 @@
 #define PERL_NO_GET_CONTEXT 1
 #include "EXTERN.h"
 #include "perl.h"
+#include "callchecker0.h"
 #include "XSUB.h"
 
 #define PERL_VERSION_DECIMAL(r,v,s) (r*1000000 + v*1000 + s)
@@ -18,6 +19,8 @@
 # define WARNINGS_t STRLEN
 #endif /* !QHAVE_WARNINGS_AS_SV */
 
+#define QLEX_START_LINE_IS_SAFE PERL_VERSION_GE(5,13,7)
+#define QHAVE_PARSE_STMTSEQ PERL_VERSION_GE(5,13,6)
 #define QHAVE_COP_LABEL (!PERL_VERSION_GE(5,11,0))
 #define QHAVE_COP_HINTS PERL_VERSION_GE(5,9,4)
 #define QHAVE_COP_HINTS_HASH PERL_VERSION_GE(5,9,4)
@@ -144,9 +147,27 @@ static SV *THX_newSV_type(pTHX_ svtype type)
 # endif /* !append_elem */
 #endif /* !op_append_elem */
 
+#ifndef mess
+# define mess Perl_mess_nocontext
+#endif /* !mess */
+
 #ifndef croak
 # define croak Perl_croak_nocontext
 #endif /* !croak */
+
+#if PERL_VERSION_GE(5,15,5)
+# define LOCALLY_SET_CURSTASH(newstash) \
+	do { \
+		SAVEGENERICSV(PL_curstash); \
+		PL_curstash = (HV*)SvREFCNT_inc((SV*)(newstash)); \
+	} while(0)
+#else /* <5.15.5 */
+# define LOCALLY_SET_CURSTASH(newstash) \
+	do { \
+		SAVESPTR(PL_curstash); \
+		PL_curstash = (newstash); \
+	} while(0)
+#endif /* <5.15.5 */
 
 #if QHAVE_COP_HINTS_HASH && !PERL_VERSION_GE(5,13,7)
 
@@ -189,6 +210,10 @@ typedef struct refcounted_he COPHH;
 # define pad_tidy(t) Perl_pad_tidy(aTHX_ t)
 #endif /* !pad_new */
 
+#ifndef qerror
+# define qerror(m) Perl_qerror(aTHX_ m)
+#endif /* !qerror */
+
 #if PERL_VERSION_GE(5,9,5)
 # define PL_error_count (PL_parser->error_count)
 #endif /* >=5.9.5 */
@@ -204,40 +229,6 @@ typedef struct refcounted_he COPHH;
 		PL_error_count = 0; \
 	} while(0)
 #endif /* <5.9.5 */
-
-#if PERL_VERSION_GE(5,13,5)
-# ifndef yyparse
-#  define yyparse(g) Perl_yyparse(aTHX_ g)
-# endif /* !yyparse */
-# define yyparse_prog() yyparse(GRAMPROG)
-#else /* <5.13.5 */
-# ifndef yyparse
-#  define yyparse() Perl_yyparse(aTHX)
-# endif /* !yyparse */
-# define yyparse_prog() yyparse()
-#endif /* <5.13.5 */
-
-#ifndef CvSTASH_set
-# if PERL_VERSION_GE(5,13,3)
-#  ifndef sv_del_backref
-#   define sv_del_backref(t,s) Perl_sv_del_backref(aTHX_ t,s)
-#  endif /* !sv_del_backref */
-#  ifndef sv_add_backref
-#   define sv_add_backref(t,s) Perl_sv_add_backref(aTHX_ t,s)
-PERL_CALLCONV void Perl_sv_add_backref(pTHX_ SV *t, SV *s);
-#  endif /* !sv_add_backref */
-#  define CvSTASH_set(cv, newst) THX_cvstash_set(aTHX_ cv, newst)
-static void THX_cvstash_set(pTHX_ CV *cv, HV *newst)
-{
-	HV *oldst = CvSTASH(cv);
-	if(oldst) sv_del_backref((SV*)oldst, (SV*)cv);
-	CvSTASH(cv) = newst;
-	if(newst) sv_add_backref((SV*)newst, (SV*)cv);
-}
-# else /* <5.13.3 */
-#  define CvSTASH_set(cv, newst) (CvSTASH(cv) = (newst))
-# endif /* <5.13.3 */
-#endif /* !CvSTASH_set */
 
 #define sv_is_glob(sv) (SvTYPE(sv) == SVt_PVGV)
 
@@ -279,9 +270,6 @@ static HV *stash_env, *stash_cophh;
 
 static SV *undef_sv;
 static SV *warnsv_all, *warnsv_none;
-
-static OP *(*nxck_entersub)(pTHX_ OP *op);
-static CV *curenv_cv;
 
 #define safe_av_fetch(av, index) THX_safe_av_fetch(aTHX_ av, index)
 static SV *THX_safe_av_fetch(pTHX_ AV *av, I32 index)
@@ -607,7 +595,9 @@ static OP *THX_gen_current_environment_op(pTHX)
 		for(ix = fname+1; ix--; ) {
 			SV *namesv = pname[ix];
 			if(namesv && SvPOKp(namesv) && SvCUR(namesv) > 1) {
+				PADOFFSET po;
 				/*
+				 * On Perls prior to 5.15.8,
 				 * Perl_pad_findmy_sv() or
 				 * Perl_pad_findmy() is marked as having
 				 * an unignorable return value.  In fact
@@ -616,9 +606,10 @@ static OP *THX_gen_current_environment_op(pTHX)
 				 * a slot in the current pad for a
 				 * lexically inherited variable), and it
 				 * is correct to ignore the return value.
-				 * Expect a compiler warning.
+				 * The redundant assignment suppresses a
+				 * compiler warning.
 				 */
-				(void) pad_findmy_sv(namesv, 0);
+				po = pad_findmy_sv(namesv, 0);
 			}
 		}
 	}
@@ -661,130 +652,12 @@ static OP *THX_gen_current_environment_op(pTHX)
 		newSVOP(OP_CONST, 0, SvREFCNT_inc(pkgname_env)));
 }
 
-#define rvop_cv(rvop) THX_rvop_cv(aTHX_ rvop)
-static CV *THX_rvop_cv(pTHX_ OP *rvop)
+static OP *myck_entersub_curenv(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 {
-	switch(rvop->op_type) {
-		case OP_CONST: {
-			SV *rv = cSVOPx_sv(rvop);
-			return SvROK(rv) ? (CV*)SvRV(rv) : NULL;
-		} break;
-		case OP_GV: return GvCV(cGVOPx_gv(rvop));
-		default: return NULL;
-	}
+	entersubop = ck_entersub_args_proto(entersubop, namegv, protosv);
+	op_free(entersubop);
+	return gen_current_environment_op();
 }
-
-static OP *ck_entersub(pTHX_ OP *op)
-{
-	OP *pushop, *cvop;
-	pushop = cUNOPx(op)->op_first;
-	if(!pushop->op_sibling) pushop = cUNOPx(pushop)->op_first;
-	for(cvop = pushop; cvop->op_sibling; cvop = cvop->op_sibling) ;
-	if(cvop->op_type == OP_RV2CV &&
-			!(cvop->op_private & OPpENTERSUB_AMPER) &&
-			rvop_cv(cUNOPx(cvop)->op_first) == curenv_cv) {
-		op = nxck_entersub(aTHX_ op);   /* for prototype checking */
-		op_free(op);
-		return gen_current_environment_op();
-	} else {
-		return nxck_entersub(aTHX_ op);
-	}
-}
-
-#ifdef PARENT_PAD_INDEX
-
-#define populate_pad() THX_populate_pad(aTHX)
-static void THX_populate_pad(pTHX)
-{
-	/* pad is fully populated during normal compilation */
-}
-
-#else /* !PARENT_PAD_INDEX */
-
-#define var_from_outside_compcv(cv, namesv) \
-	THX_var_from_outside_compcv(aTHX_ cv, namesv)
-static int THX_var_from_outside_compcv(pTHX_ CV *cv, SV *namesv)
-{
-	while(1) {
-		/*
-		 * Loop invariant: the variable identified by namesv
-		 * is inherited into cv from outside, and cv is not
-		 * PL_compcv.
-		 */
-		U32 seq;
-		AV *padname;
-		I32 ix;
-		seq = CvOUTSIDE_SEQ(cv);
-		cv = CvOUTSIDE(cv);
-		if(!cv) return 0;
-		padname = (AV*)*av_fetch(CvPADLIST(cv), 0, 0);
-		for(ix = AvFILLp(padname)+1; ix--; ) {
-			SV **pnamesv_p, *pnamesv;
-			if((pnamesv_p = av_fetch(padname, ix, 0)) &&
-					(pnamesv = *pnamesv_p) &&
-					SvPOKp(pnamesv) &&
-					strEQ(SvPVX(pnamesv), SvPVX(namesv)) &&
-					seq > COP_SEQ_RANGE_LOW(pnamesv) &&
-					seq <= COP_SEQ_RANGE_HIGH(pnamesv))
-				return 0;
-		}
-		if(cv == PL_compcv) return 1;
-	}
-}
-
-#define populate_pad_from_sub(func) THX_populate_pad_from_sub(aTHX_ func)
-static void THX_populate_pad_from_sub(pTHX_ CV *func)
-{
-	AV *padname = (AV*)*av_fetch(CvPADLIST(func), 0, 0);
-	I32 ix;
-	for(ix = AvFILLp(padname)+1; ix--; ) {
-		SV **namesv_p, *namesv;
-		if((namesv_p = av_fetch(padname, ix, 0)) &&
-				(namesv = *namesv_p) &&
-				SvPOKp(namesv) && SvCUR(namesv) > 1 &&
-				SvFAKE(namesv) &&
-				var_from_outside_compcv(func, namesv)) {
-			/*
-			 * As noted in THX_gen_current_environment_op(),
-			 * this statement will generate a compiler
-			 * warning relating to Perl_pad_findmy_sv() or
-			 * Perl_pad_findmy().
-			 */
-			(void) pad_findmy_sv(namesv, 0);
-		}
-	}
-}
-
-#define populate_pad_recursively(func) THX_populate_pad_recursively(aTHX_ func)
-static void THX_populate_pad_recursively(pTHX_ CV *func);
-static void THX_populate_pad_recursively(pTHX_ CV *func)
-{
-	AV *padlist = CvPADLIST(func);
-	AV *padname = (AV*)*av_fetch(padlist, 0, 0);
-	AV *pad = (AV*)*av_fetch(padlist, 1, 0);
-	I32 ix;
-	for(ix = AvFILLp(padname)+1; ix--; ) {
-		SV **namesv_p, *namesv;
-		CV *sub;
-		if((namesv_p = av_fetch(padname, ix, 0)) &&
-				(namesv = *namesv_p) &&
-				SvPOKp(namesv) && SvCUR(namesv) == 1 &&
-				*SvPVX(namesv) == '&' &&
-				(sub = (CV*)*av_fetch(pad, ix, 0)) &&
-				CvCLONE(sub)) {
-			populate_pad_from_sub(sub);
-			populate_pad_recursively(sub);
-		}
-	}
-}
-
-#define populate_pad() THX_populate_pad(aTHX)
-static void THX_populate_pad(pTHX)
-{
-	populate_pad_recursively(PL_compcv);
-}
-
-#endif /* !PARENT_PAD_INDEX */
 
 #define close_pad(func, outpad) THX_close_pad(aTHX_ func, outpad)
 static void THX_close_pad(pTHX_ CV *func, AV *outpad)
@@ -844,11 +717,215 @@ static void THX_close_pad(pTHX_ CV *func, AV *outpad)
 	}
 }
 
+#if QHAVE_PARSE_STMTSEQ
+
+# define parse_file_as_sub_body(outpad) \
+	THX_parse_file_as_sub_body(aTHX_ outpad)
+static void THX_parse_file_as_sub_body(pTHX_ AV *outpad)
+{
+	OP *stmtseq;
+	ENTER;
+	SAVEI8(PL_in_eval);
+	PL_in_eval = EVAL_INEVAL;
+	stmtseq = parse_stmtseq(0);
+	if(lex_peek_unichar(0) == /*{*/'}') qerror(mess("Parse error"));
+	LEAVE;
+	if(PL_error_count) {
+		if(stmtseq) op_free(stmtseq);
+		return;
+	}
+	if(!stmtseq) stmtseq = newOP(OP_STUB, 0);
+	if(CvCLONE(PL_compcv)) {
+		close_pad(PL_compcv, outpad);
+		CvCLONE_off(PL_compcv);
+	}
+	newATTRSUB(PL_savestack_ix, NULL, NULL, NULL, stmtseq);
+}
+
+#else /* !QHAVE_PARSE_STMTSEQ */
+
+# if PERL_VERSION_GE(5,13,5)
+#  ifndef yyparse
+#   define yyparse(g) Perl_yyparse(aTHX_ g)
+#  endif /* !yyparse */
+#  define yyparse_prog() yyparse(GRAMPROG)
+# else /* <5.13.5 */
+#  ifndef yyparse
+#   define yyparse() Perl_yyparse(aTHX)
+#  endif /* !yyparse */
+#  define yyparse_prog() yyparse()
+# endif /* <5.13.5 */
+
+# ifndef CvSTASH_set
+#  if PERL_VERSION_GE(5,13,3)
+#   ifndef sv_del_backref
+#    define sv_del_backref(t,s) Perl_sv_del_backref(aTHX_ t,s)
+#   endif /* !sv_del_backref */
+#   ifndef sv_add_backref
+#    define sv_add_backref(t,s) Perl_sv_add_backref(aTHX_ t,s)
+PERL_CALLCONV void Perl_sv_add_backref(pTHX_ SV *t, SV *s);
+#   endif /* !sv_add_backref */
+#   define CvSTASH_set(cv, newst) THX_cvstash_set(aTHX_ cv, newst)
+static void THX_cvstash_set(pTHX_ CV *cv, HV *newst)
+{
+	HV *oldst = CvSTASH(cv);
+	if(oldst) sv_del_backref((SV*)oldst, (SV*)cv);
+	CvSTASH(cv) = newst;
+	if(newst) sv_add_backref((SV*)newst, (SV*)cv);
+}
+#  else /* <5.13.3 */
+#   define CvSTASH_set(cv, newst) (CvSTASH(cv) = (newst))
+#  endif /* <5.13.3 */
+# endif /* !CvSTASH_set */
+
+# ifdef PARENT_PAD_INDEX
+
+#  define populate_pad() THX_populate_pad(aTHX)
+static void THX_populate_pad(pTHX)
+{
+	/* pad is fully populated during normal compilation */
+}
+
+# else /* !PARENT_PAD_INDEX */
+
+#  define var_from_outside_compcv(cv, namesv) \
+	THX_var_from_outside_compcv(aTHX_ cv, namesv)
+static int THX_var_from_outside_compcv(pTHX_ CV *cv, SV *namesv)
+{
+	while(1) {
+		/*
+		 * Loop invariant: the variable identified by namesv
+		 * is inherited into cv from outside, and cv is not
+		 * PL_compcv.
+		 */
+		U32 seq;
+		AV *padname;
+		I32 ix;
+		seq = CvOUTSIDE_SEQ(cv);
+		cv = CvOUTSIDE(cv);
+		if(!cv) return 0;
+		padname = (AV*)*av_fetch(CvPADLIST(cv), 0, 0);
+		for(ix = AvFILLp(padname)+1; ix--; ) {
+			SV **pnamesv_p, *pnamesv;
+			if((pnamesv_p = av_fetch(padname, ix, 0)) &&
+					(pnamesv = *pnamesv_p) &&
+					SvPOKp(pnamesv) &&
+					strEQ(SvPVX(pnamesv), SvPVX(namesv)) &&
+					seq > COP_SEQ_RANGE_LOW(pnamesv) &&
+					seq <= COP_SEQ_RANGE_HIGH(pnamesv))
+				return 0;
+		}
+		if(cv == PL_compcv) return 1;
+	}
+}
+
+#  define populate_pad_from_sub(func) THX_populate_pad_from_sub(aTHX_ func)
+static void THX_populate_pad_from_sub(pTHX_ CV *func)
+{
+	AV *padname = (AV*)*av_fetch(CvPADLIST(func), 0, 0);
+	I32 ix;
+	for(ix = AvFILLp(padname)+1; ix--; ) {
+		SV **namesv_p, *namesv;
+		if((namesv_p = av_fetch(padname, ix, 0)) &&
+				(namesv = *namesv_p) &&
+				SvPOKp(namesv) && SvCUR(namesv) > 1 &&
+				SvFAKE(namesv) &&
+				var_from_outside_compcv(func, namesv)) {
+			PADOFFSET po;
+			/*
+			 * As noted in THX_gen_current_environment_op(),
+			 * this statement tries to suppress a compiler
+			 * warning relating to Perl_pad_findmy_sv() or
+			 * Perl_pad_findmy().
+			 */
+			po = pad_findmy_sv(namesv, 0);
+		}
+	}
+}
+
+#  define populate_pad_recursively(func) \
+	THX_populate_pad_recursively(aTHX_ func)
+static void THX_populate_pad_recursively(pTHX_ CV *func);
+static void THX_populate_pad_recursively(pTHX_ CV *func)
+{
+	AV *padlist = CvPADLIST(func);
+	AV *padname = (AV*)*av_fetch(padlist, 0, 0);
+	AV *pad = (AV*)*av_fetch(padlist, 1, 0);
+	I32 ix;
+	for(ix = AvFILLp(padname)+1; ix--; ) {
+		SV **namesv_p, *namesv;
+		CV *sub;
+		if((namesv_p = av_fetch(padname, ix, 0)) &&
+				(namesv = *namesv_p) &&
+				SvPOKp(namesv) && SvCUR(namesv) == 1 &&
+				*SvPVX(namesv) == '&' &&
+				(sub = (CV*)*av_fetch(pad, ix, 0)) &&
+				CvCLONE(sub)) {
+			populate_pad_from_sub(sub);
+			populate_pad_recursively(sub);
+		}
+	}
+}
+
+#  define populate_pad() THX_populate_pad(aTHX)
+static void THX_populate_pad(pTHX)
+{
+	populate_pad_recursively(PL_compcv);
+}
+
+# endif /* !PARENT_PAD_INDEX */
+
+# define parse_file_as_sub_body(outpad) \
+	THX_parse_file_as_sub_body(aTHX_ outpad)
+static void THX_parse_file_as_sub_body(pTHX_ AV *outpad)
+{
+	OP *rootop, *startop;
+	int parse_fail;
+	CvSTASH_set(PL_compcv, PL_curstash);
+	CvGV_set(PL_compcv, PL_curstash ?
+		gv_fetchpvs("__ANON__", GV_ADDMULTI, SVt_PVCV) :
+		gv_fetchpvs("__ANON__::__ANON__", GV_ADDMULTI, SVt_PVCV));
+	ENTER;
+	SAVEVPTR(PL_eval_root);
+	SAVEVPTR(PL_eval_start);
+	SAVEI8(PL_in_eval);
+	PL_eval_root = NULL;
+	PL_eval_start = NULL;
+	PL_in_eval = EVAL_INEVAL;
+	parse_fail = yyparse_prog();
+	rootop = PL_eval_root;
+	startop = PL_eval_start;
+	if(parse_fail && !PL_error_count) qerror(mess("Parse error"));
+	if(!rootop || rootop->op_type != OP_LEAVEEVAL) {
+		if(!PL_error_count) qerror(mess("Compilation error"));
+	}
+	LEAVE;
+	if(PL_error_count) {
+		if(rootop) op_free(rootop);
+		return;
+	}
+	rootop->op_type = OP_LEAVESUB;
+	rootop->op_ppaddr = PL_ppaddr[OP_LEAVESUB];
+	rootop->op_flags &= OPf_KIDS|OPf_PARENS;
+	CvROOT(PL_compcv) = rootop;
+	CvSTART(PL_compcv) = startop;
+	if(CvCLONE(PL_compcv)) {
+		populate_pad();
+		close_pad(PL_compcv, outpad);
+		CvCLONE_off(PL_compcv);
+	}
+	pad_tidy(padtidy_SUB);
+}
+
+#endif /* !QHAVE_PARSE_STMTSEQ */
+
 MODULE = Parse::Perl PACKAGE = Parse::Perl
 
 PROTOTYPES: DISABLE
 
 BOOT:
+{
+	CV *curenv_cv;
 	undef_sv = newSV(0);
 	SvREADONLY_on(undef_sv);
 	pkgname_env = newSVpvs("Parse::Perl::Environment");
@@ -859,10 +936,9 @@ BOOT:
 	SvREADONLY_on(warnsv_all);
 	warnsv_none = newSVpvn(WARN_NONEstring, WARNsize);
 	SvREADONLY_on(warnsv_none);
-	nxck_entersub = PL_check[OP_ENTERSUB];
-	PL_check[OP_ENTERSUB] = ck_entersub;
 	curenv_cv = get_cv("Parse::Perl::current_environment", 0);
-
+	cv_set_call_checker(curenv_cv, myck_entersub_curenv, (SV*)curenv_cv);
+}
 
 void
 current_environment(...)
@@ -899,8 +975,7 @@ CODE:
 	CopLINE_set(&PL_compiling, 1);
 	SAVEI32(PL_subline);
 	PL_subline = 1;
-	SAVESPTR(PL_curstash);
-	PL_curstash = package_from_sv(safe_av_fetch(enva, ENV_PACKAGE));
+	LOCALLY_SET_CURSTASH(package_from_sv(safe_av_fetch(enva, ENV_PACKAGE)));
 	save_item(PL_curstname);
 	sv_setpv(PL_curstname,
 			!PL_curstash ? "<none>" : HvNAME_get(PL_curstash));
@@ -959,10 +1034,6 @@ CODE:
 	SAVEGENERICSV(PL_compcv);
 	PL_compcv = (CV*)newSV_type(SVt_PVCV);
 	CvANON_on(PL_compcv);
-	CvSTASH_set(PL_compcv, PL_curstash);
-	CvGV_set(PL_compcv, PL_curstash ?
-		gv_fetchpvs("__ANON__", GV_ADDMULTI, SVt_PVCV) :
-		gv_fetchpvs("__ANON__::__ANON__", GV_ADDMULTI, SVt_PVCV));
 	CvOUTSIDE(PL_compcv) =
 		function_from_sv(safe_av_fetch(enva, ENV_OUTSIDECV));
 	CvOUTSIDE_SEQ(PL_compcv) =
@@ -977,46 +1048,20 @@ CODE:
 	SAVEGENERICSV(PL_unitcheckav);
 	PL_unitcheckav = newAV();
 #endif /* QHAVE_UNITCHECK */
-	SAVEVPTR(PL_eval_root);
-	PL_eval_root = NULL;
-	SAVEVPTR(PL_eval_start);
-	PL_eval_start = NULL;
 	/* parse */
-	{
-		int parse_fail;
-		U8 old_in_eval;
-		SAVEI8(PL_in_eval);
-		old_in_eval = PL_in_eval;
-		PL_in_eval = EVAL_INEVAL;
-		lex_start_simple(source);
-		parse_fail = yyparse_prog();
-		lex_end();
-		PL_in_eval = old_in_eval;
-		if(parse_fail || PL_error_count || !PL_eval_root ||
-				PL_eval_root->op_type != OP_LEAVEEVAL) {
-			if(PL_eval_root) {
-				op_free(PL_eval_root);
-				PL_eval_root = NULL;
-				PL_eval_start = NULL;
-			}
-			if(!(SvPOK(ERRSV) && SvCUR(ERRSV) != 0))
-				sv_setpvs(ERRSV, "Compilation error");
-			Perl_die(aTHX_ NULL);
-		}
+#if !QLEX_START_LINE_IS_SAFE
+	source = sv_mortalcopy(source);
+#endif /* !QLEX_START_LINE_IS_SAFE */
+	lex_start_simple(source);
+	parse_file_as_sub_body(
+		array_from_sv(safe_av_fetch(enva, ENV_OUTSIDEPAD)));
+	lex_end();
+	if(PL_error_count) {
+		if(!(SvPOK(ERRSV) && SvCUR(ERRSV) != 0))
+			sv_setpvs(ERRSV, "Compilation error");
+		Perl_die(aTHX_ NULL);
 	}
-	/* construct and return result */
-	PL_eval_root->op_type = OP_LEAVESUB;
-	PL_eval_root->op_ppaddr = PL_ppaddr[OP_LEAVESUB];
-	PL_eval_root->op_flags &= OPf_KIDS|OPf_PARENS;
-	CvROOT(PL_compcv) = PL_eval_root;
-	CvSTART(PL_compcv) = PL_eval_start;
-	if(CvCLONE(PL_compcv)) {
-		populate_pad();
-		close_pad(PL_compcv,
-			array_from_sv(safe_av_fetch(enva, ENV_OUTSIDEPAD)));
-		CvCLONE_off(PL_compcv);
-	}
-	pad_tidy(padtidy_SUB);
+	/* finalise */
 #if QHAVE_UNITCHECK
 	if(PL_unitcheckav) call_list(PL_scopestack_ix, PL_unitcheckav);
 #endif /* QHAVE_UNITCHECK */

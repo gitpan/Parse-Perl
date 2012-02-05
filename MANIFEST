@@ -1,4 +1,4 @@
-.cvsignore
+.gitignore
 Build.PL
 Changes
 MANIFEST
@@ -6,13 +6,14 @@ META.json
 META.yml
 Makefile.PL
 README
-lib/Parse/.cvsignore
 lib/Parse/Perl.pm
 lib/Parse/Perl.xs
 lib/Parse/Perl/CopHintsHash.pod
 lib/Parse/Perl/Environment.pod
 t/args.t
+t/context.t
 t/curcop.t
+t/develdeclare.t
 t/error.t
 t/except.t
 t/lex_arybase.t
@@ -30,4 +31,5 @@ t/phase.t
 t/pod_cvg.t
 t/pod_syn.t
 t/return.t
+t/stub.t
 SIGNATURE    Added here by Module::Build

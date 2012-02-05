@@ -41,7 +41,9 @@ package Parse::Perl;
 use warnings;
 use strict;
 
-our $VERSION = "0.006";
+use Devel::CallChecker 0.003 ();
+
+our $VERSION = "0.007";
 
 use parent "Exporter";
 our @EXPORT_OK = qw(current_environment parse_perl);
@@ -51,12 +53,12 @@ XSLoader::load(__PACKAGE__, $VERSION);
 
 {
 	package Parse::Perl::CopHintsHash;
-	our $VERSION = "0.006";
+	our $VERSION = "0.007";
 }
 
 {
 	package Parse::Perl::Environment;
-	our $VERSION = "0.006";
+	our $VERSION = "0.007";
 }
 
 =head1 OPERATORS
@@ -114,7 +116,8 @@ Andrew Main (Zefram) <zefram@fysh.org>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2009, 2010, 2011 Andrew Main (Zefram) <zefram@fysh.org>
+Copyright (C) 2009, 2010, 2011, 2012
+Andrew Main (Zefram) <zefram@fysh.org>
 
 =head1 LICENSE
 

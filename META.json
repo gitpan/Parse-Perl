@@ -4,7 +4,7 @@
       "Andrew Main (Zefram) <zefram@fysh.org>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.112150",
+   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.112621",
    "license" : [
       "perl_5"
    ],
@@ -16,6 +16,7 @@
    "prereqs" : {
       "build" : {
          "requires" : {
+            "Devel::CallChecker" : "0.003",
             "ExtUtils::CBuilder" : "0.15",
             "Module::Build" : 0,
             "Test::More" : 0,
@@ -34,6 +35,7 @@
       },
       "runtime" : {
          "requires" : {
+            "Devel::CallChecker" : "0.003",
             "Exporter" : 0,
             "XSLoader" : 0,
             "parent" : 0,
@@ -46,15 +48,15 @@
    "provides" : {
       "Parse::Perl" : {
          "file" : "lib/Parse/Perl.pm",
-         "version" : "0.006"
+         "version" : "0.007"
       },
       "Parse::Perl::CopHintsHash" : {
          "file" : "lib/Parse/Perl.pm",
-         "version" : "0.006"
+         "version" : "0.007"
       },
       "Parse::Perl::Environment" : {
          "file" : "lib/Parse/Perl.pm",
-         "version" : "0.006"
+         "version" : "0.007"
       }
    },
    "release_status" : "stable",
@@ -63,5 +65,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "0.006"
+   "version" : "0.007"
 }

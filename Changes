@@ -1,7 +1,34 @@
+version 0.007; 2012-02-05
+
+  * bugfix: on Perls prior to 5.13.7, avoid source string being mutated
+    by parser plugin code such as Devel::Declare
+
+  * bugfix: on Perl 5.15.2 and above, avoid failure of a new assertion,
+    by using parse_stmtseq() rather than GRAMPROG
+
+  * port to Perl 5.15.5: PL_curstash is now reference-counted
+
+  * trigger custom op generation via Devel::CallChecker rather than by
+    hooking the underlying op checker
+
+  * new tests for context handling
+
+  * test $[ as part of lexical environment on Perls 5.15.5 and above,
+    where it has been reimplemented in the arybase module, with a
+    workaround for a bug in arybase
+
+  * test $[ as part of lexical environment on Perls 5.15.0 up to 5.15.2,
+    where it was previously expected to be removed but actually wasn't
+
+  * jump through another hoop to duck the compiler warning previously
+    noted to be unavoidable
+
+  * convert .cvsignore to .gitignore
+
 version 0.006; 2011-09-05
 
   * port to Perl 5.15.1: pad_findmy_sv() is in the API, replacing the
-    non-API pad_findmy()
+    provisional API pad_findmy()
 
   * include META.json in distribution
 
